@@ -161,15 +161,16 @@ export class XRManager {
     this.vignette.attach(this.camera);
 
     // ── Fade-from-black overlay (shown on VR session start) ──
-    // Full-screen black quad attached to camera, fades out over ~1.5s.
+    // Clip-space full-screen quad (same technique as VRComfortVignette) so it
+    // works correctly with WebXR's stereo projection override.
     const fadeGeo = new THREE.PlaneGeometry(2, 2);
-    const fadeMat = new THREE.MeshBasicMaterial({
-      color: 0x000000,
+    const fadeMat = new THREE.ShaderMaterial({
+      vertexShader: `void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+      fragmentShader: `uniform float opacity; void main() { gl_FragColor = vec4(0.0, 0.0, 0.0, opacity); }`,
+      uniforms: { opacity: { value: 0.0 } },
       transparent: true,
-      opacity: 0,
       depthTest: false,
       depthWrite: false,
-      side: THREE.DoubleSide,
     });
     this._fadeMesh = new THREE.Mesh(fadeGeo, fadeMat);
     this._fadeMesh.renderOrder = 999; // just below vignette
@@ -177,7 +178,7 @@ export class XRManager {
     this._fadeMesh.visible = false;
     this.camera.add(this._fadeMesh);
     this._fadeTimer = 0;
-    this._fadeDuration = 1.5;
+    this._fadeDuration = 4.0;
 
     // VR HUD (population dive-watch) - deferred to 'connected' event
     // so we know which controller is left hand.
@@ -286,6 +287,12 @@ export class XRManager {
 
     // Listen for session start/end
     xr.addEventListener('sessionstart', () => {
+      // Cut to black IMMEDIATELY — before any camera/rig work — to hide VR setup
+      if (this._fadeMesh) {
+        this._fadeMesh.material.uniforms.opacity.value = 1;
+        this._fadeMesh.visible = true;
+        this._fadeTimer = -0.5; // hold black for 0.5s to let framerate stabilize
+      }
       this._active = true;
       this._hasLastPos = false;
       // Position rig now that VR is active (local-floor adds eye height)
@@ -295,12 +302,6 @@ export class XRManager {
       // Reset vignette on session start
       if (this.vignette) {
         this.vignette.setIntensity(0);
-      }
-      // Fade in from black (prevents jarring pop-in)
-      if (this._fadeMesh) {
-        this._fadeMesh.material.opacity = 1;
-        this._fadeMesh.visible = true;
-        this._fadeTimer = 0;
       }
       // Show HUD when entering VR
       if (this.hud) this.hud.setVisible(true);
@@ -561,13 +562,20 @@ export class XRManager {
       console.error('[XR] laser error:', e);
     }
 
-    // ── Fade-from-black animation ──
+    // ── Fade-from-black animation (ease-out for gentle reveal) ──
+    // Timer starts negative (hold period); fade begins at t=0.
     if (this._fadeMesh && this._fadeMesh.visible) {
       this._fadeTimer += dt;
-      const t = Math.min(this._fadeTimer / this._fadeDuration, 1);
-      this._fadeMesh.material.opacity = 1 - t;
-      if (t >= 1) {
-        this._fadeMesh.visible = false;
+      if (this._fadeTimer <= 0) {
+        // Still in hold period — stay fully black
+        this._fadeMesh.material.uniforms.opacity.value = 1;
+      } else {
+        const t = Math.min(this._fadeTimer / this._fadeDuration, 1);
+        const ease = 1 - (1 - t) * (1 - t);
+        this._fadeMesh.material.uniforms.opacity.value = 1 - ease;
+        if (t >= 1) {
+          this._fadeMesh.visible = false;
+        }
       }
     }
 
