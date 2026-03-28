@@ -560,6 +560,10 @@ async function init() {
     const food = foodPool.get();
     if (!food) return;
     food.activateHeld(position);
+    // Instanced rendering skips held food (it early-returns for VR grip parenting).
+    // For desktop/mobile the mesh has no parent, so add it to the scene directly
+    // so it's visible while held.
+    if (!food.mesh.parent) scene.add(food.mesh);
     heldFood = food;
     audioManager.playSFXVariant('spawn');
   };
@@ -567,6 +571,8 @@ async function init() {
     if (GS.endSequenceActive) return;
     if (modeManager.currentMode?.name !== 'narrative') return;
     if (heldFood && heldFood.active) {
+      // Remove from scene before release — instanced mesh takes over rendering
+      if (heldFood.mesh.parent === scene) scene.remove(heldFood.mesh);
       heldFood.release();
       heldFood.body.addImpulse(force);
       audioManager.playSFXVariant('throw');
@@ -1020,6 +1026,8 @@ function gameLoop() {
     if (xrManager && xrManager.active) {
       xrManager.pulseEatHaptic();
     }
+    // Remove from scene if we added it for desktop/mobile held rendering
+    if (heldFood.mesh.parent === scene) scene.remove(heldFood.mesh);
     heldFood = null; // food was eaten/expired
   }
   // VR: check per-controller held food for eaten/expired - unparent if needed
