@@ -125,6 +125,10 @@ The project deploys as a static site. A `vercel.json` is included for Vercel hos
 
 Audio assets are used under Creative Commons licenses. See attribution files in `assets/audio/` for details. 3D models are original work.
 
+## Contact
+
+Questions or feedback? [Open an issue](https://github.com/occ-matt/polyfish/issues) on this repo, or find me on [Bluesky](https://bsky.app/profile/mattscott.bsky.social).
+
 ## License
 
 MIT - see [LICENSE](LICENSE) for details.
