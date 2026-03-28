@@ -331,9 +331,9 @@ export class CameraController {
     }
 
     // Build input direction from keys
+    // Forward uses full 3D camera direction (swimming/flying feel)
     _forward.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
-    _forward.y = 0;
-    _forward.normalize();
+    // Strafe stays horizontal so A/D don't roll you into the ground
     _right.set(1, 0, 0).applyQuaternion(this.camera.quaternion);
     _right.y = 0;
     _right.normalize();
