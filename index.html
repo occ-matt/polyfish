@@ -408,6 +408,109 @@
         max-width: 80vw;
       }
     }
+    /* Loading screen — pure CSS, shows instantly before any JS loads */
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: #0a1929;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 4s ease-out;
+      overflow: hidden;
+    }
+    #loading-screen.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    /* Subtle underwater caustic light wash */
+    #loading-screen::before {
+      content: '';
+      position: absolute;
+      inset: -50%;
+      background:
+        radial-gradient(ellipse 600px 400px at 30% 40%, rgba(27, 44, 113, 0.4) 0%, transparent 70%),
+        radial-gradient(ellipse 500px 350px at 70% 60%, rgba(35, 57, 67, 0.35) 0%, transparent 70%);
+      animation: loading-caustic 6s ease-in-out infinite alternate;
+    }
+    @keyframes loading-caustic {
+      0%   { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(-3%, 2%) scale(1.05); }
+    }
+    /* Marine snow — tiny triangles drifting down */
+    .loading-snow {
+      position: absolute;
+      top: -12px;
+      width: 0; height: 0;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-bottom: 7px solid rgba(180, 210, 240, 0.18);
+      animation: loading-fall linear infinite;
+      will-change: transform, opacity;
+    }
+    /* Negative delays start particles already mid-fall so snow is visible from frame 1 */
+    .loading-snow:nth-child(1)  { left:  3%; animation-duration: 7s;   animation-delay: -2.1s;  border-bottom-width: 6px; border-left-width: 3px;   border-right-width: 3px; }
+    .loading-snow:nth-child(2)  { left: 11%; animation-duration: 10s;  animation-delay: -7.5s;  border-bottom-width: 4px; border-left-width: 2px;   border-right-width: 2px;   border-bottom-color: rgba(180, 210, 240, 0.10); }
+    .loading-snow:nth-child(3)  { left: 18%; animation-duration: 8.5s; animation-delay: -1.2s;  border-bottom-width: 7px; border-left-width: 3.5px; border-right-width: 3.5px; border-bottom-color: rgba(180, 210, 240, 0.20); }
+    .loading-snow:nth-child(4)  { left: 26%; animation-duration: 12s;  animation-delay: -9.0s;  border-bottom-width: 5px; border-left-width: 2.5px; border-right-width: 2.5px; border-bottom-color: rgba(180, 210, 240, 0.08); }
+    .loading-snow:nth-child(5)  { left: 33%; animation-duration: 9s;   animation-delay: -4.5s;  border-bottom-width: 8px; border-left-width: 4px;   border-right-width: 4px;   border-bottom-color: rgba(180, 210, 240, 0.22); }
+    .loading-snow:nth-child(6)  { left: 41%; animation-duration: 11s;  animation-delay: -6.3s;  border-bottom-width: 4px; border-left-width: 2px;   border-right-width: 2px;   border-bottom-color: rgba(180, 210, 240, 0.09); }
+    .loading-snow:nth-child(7)  { left: 49%; animation-duration: 8s;   animation-delay: -3.2s;  border-bottom-width: 6px; border-left-width: 3px;   border-right-width: 3px;   border-bottom-color: rgba(180, 210, 240, 0.16); }
+    .loading-snow:nth-child(8)  { left: 56%; animation-duration: 10.5s;animation-delay: -8.4s;  border-bottom-width: 5px; border-left-width: 2.5px; border-right-width: 2.5px; border-bottom-color: rgba(180, 210, 240, 0.11); }
+    .loading-snow:nth-child(9)  { left: 63%; animation-duration: 9.5s; animation-delay: -5.7s;  border-bottom-width: 7px; border-left-width: 3.5px; border-right-width: 3.5px; border-bottom-color: rgba(180, 210, 240, 0.19); }
+    .loading-snow:nth-child(10) { left: 70%; animation-duration: 12.5s;animation-delay: -10.0s; border-bottom-width: 4px; border-left-width: 2px;   border-right-width: 2px;   border-bottom-color: rgba(180, 210, 240, 0.07); }
+    .loading-snow:nth-child(11) { left: 77%; animation-duration: 8.5s; animation-delay: -0.8s;  border-bottom-width: 6px; border-left-width: 3px;   border-right-width: 3px;   border-bottom-color: rgba(180, 210, 240, 0.14); }
+    .loading-snow:nth-child(12) { left: 84%; animation-duration: 11.5s;animation-delay: -7.0s;  border-bottom-width: 5px; border-left-width: 2.5px; border-right-width: 2.5px; border-bottom-color: rgba(180, 210, 240, 0.10); }
+    .loading-snow:nth-child(13) { left: 91%; animation-duration: 9s;   animation-delay: -3.8s;  border-bottom-width: 7px; border-left-width: 3.5px; border-right-width: 3.5px; border-bottom-color: rgba(180, 210, 240, 0.17); }
+    .loading-snow:nth-child(14) { left: 96%; animation-duration: 10s;  animation-delay: -5.2s;  border-bottom-width: 4px; border-left-width: 2px;   border-right-width: 2px;   border-bottom-color: rgba(180, 210, 240, 0.08); }
+    @keyframes loading-fall {
+      0%   { opacity: 0; transform: translateY(0)    rotate(0deg)   translateX(0); }
+      8%   { opacity: 1; transform: translateY(9vh)   rotate(10deg)  translateX(3px); }
+      50%  { opacity: 1; transform: translateY(55vh)  rotate(120deg) translateX(15px); }
+      85%  { opacity: 1; transform: translateY(94vh)  rotate(200deg) translateX(-5px); }
+      100% { opacity: 0; transform: translateY(112vh) rotate(240deg) translateX(-10px); }
+    }
+    /* Title text */
+    .loading-title {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 38px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: rgba(232, 168, 64, 0.85);
+      text-shadow: 0 2px 16px rgba(232, 168, 64, 0.2);
+      margin-bottom: 32px;
+      z-index: 1;
+    }
+    /* Progress text */
+    .loading-status {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.45);
+      z-index: 1;
+      min-height: 20px;
+      transition: opacity 0.3s ease;
+    }
+    /* Thin animated bar */
+    .loading-bar-track {
+      width: 180px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 1px;
+      margin-top: 16px;
+      overflow: hidden;
+      z-index: 1;
+    }
+    .loading-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, rgba(232, 168, 64, 0.6), rgba(150, 210, 255, 0.4));
+      border-radius: 1px;
+      transition: width 0.4s ease-out;
+    }
     /* Perf overlay (hidden by default, shown via ?dev=true) */
     #perf-overlay {
       position: fixed;
@@ -429,6 +532,25 @@
   </style>
 </head>
 <body>
+  <div id="loading-screen">
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-snow"></div>
+    <div class="loading-title">PolyFish</div>
+    <div class="loading-status" id="loading-status">Preparing</div>
+    <div class="loading-bar-track"><div class="loading-bar-fill" id="loading-bar"></div></div>
+  </div>
   <div id="perf-overlay"></div>
   <div id="hud" style="display:none;">
     <div id="population-counter"></div>

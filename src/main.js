@@ -296,6 +296,21 @@ if (_diagMode) {
 // ── Bootstrap ──────────────────────────────────────────────────
 const MINIMAL = _params.has('minimal'); // bare scene: terrain + water + lights only
 
+// ── Loading screen progress ─────────────────────────────────
+const _loadingStatusEl = document.getElementById('loading-status');
+const _loadingBarEl    = document.getElementById('loading-bar');
+function loadingProgress(message, percent) {
+  if (_loadingStatusEl) _loadingStatusEl.textContent = message;
+  if (_loadingBarEl) _loadingBarEl.style.width = `${percent}%`;
+}
+function dismissLoadingScreen() {
+  const el = document.getElementById('loading-screen');
+  if (el) {
+    el.classList.add('fade-out');
+    el.addEventListener('transitionend', () => el.remove(), { once: true });
+  }
+}
+
 async function init() {
 
   diagLog(`UA: ${navigator.userAgent.slice(0, 80)}`);
@@ -315,6 +330,7 @@ async function init() {
   }
 
   // 1. Scene, renderer, camera
+  loadingProgress('Setting up scene', 5);
   diagLog('1. SceneManager.init...');
   const renderer = sceneManager.init(document.body);
   const scene = sceneManager.getScene();
@@ -406,6 +422,7 @@ async function init() {
 
   if (!MINIMAL) {
   // 5. Audio
+  loadingProgress('Initializing audio', 20);
   audioManager = new AudioManager();
   await audioManager.init();
   GS.audioManager = audioManager;
@@ -425,6 +442,7 @@ async function init() {
   GS.spawnerSystem = spawnerSystem;
 
   // 9a. Initialise Physics (Web Worker with SharedArrayBuffer, sync fallback)
+  loadingProgress('Loading physics', 30);
   diagLog('9. Physics init...');
   physicsProxy = new PhysicsProxy();
   await physicsProxy.init();
@@ -443,6 +461,7 @@ async function init() {
   GS.debugForceHUD = debugForceHUD;
 
   // 9. Preload GLB models (fish, dolphin, manatee, food, kelp)
+  loadingProgress('Loading models', 45);
   diagLog('10. Loading models...');
   await preloadModels(['fish', 'dolphin', 'manatee', 'kelp', 'food', 'foodAlt', 'logo']);
   diagLog('10. Models OK');
@@ -455,6 +474,7 @@ async function init() {
   } // end !MINIMAL
 
   // 10. Create a low-poly reef ground (placeholder until real mesh is loaded)
+  loadingProgress('Building terrain', 60);
   diagLog('11. Terrain + water...');
   createPlaceholderTerrain(scene, USE_HIRES_TERRAIN);
 
@@ -494,6 +514,7 @@ async function init() {
   }
 
   // 11. Create entity pools
+  loadingProgress('Spawning creatures', 75);
   diagLog('12. Entity pools...');
   initPools(scene);
   diagLog('12. Pools OK');
@@ -649,7 +670,11 @@ async function init() {
     }, 2000);
   }
 
-  // 18. Fade in from black ~1s after load
+  // 18. Dismiss loading screen, then fade in from black
+  loadingProgress('Ready', 100);
+  dismissLoadingScreen();
+  // Brief pause so loading screen fade-out overlaps with the scene fade-in
+  await new Promise(r => setTimeout(r, 400));
   fadeOverlay.fadeIn(2000);
 
   // 19. Load audio clips AFTER all heavy init (models, WASM, pools) is done
