@@ -777,6 +777,9 @@ export class Creature {
       if (pos) return pos;
     }
 
+    // Held food (VR): mesh.position is in local grip space, not world space.
+    // Use body.position which is synced to grip world position by main.js.
+    if (this.foodTarget.held) return this.foodTarget.body.position;
     return this.foodTarget.mesh ? this.foodTarget.mesh.position : this.foodTarget.position;
   }
 
