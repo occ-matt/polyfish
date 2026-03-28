@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kelp & Verlet Physics  -  Making of PolyFish</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">Making of <span>PolyFish</span></a>
+    <a href="/" class="nav-play-mobile">&#9654; Play PolyFish</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+    </button>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="origins.html">Origins</a>
+      <a href="ai.html">AI Collab</a>
+      <a href="creatures.html">Creatures</a>
+      <a href="ecosystem.html">Ecosystem</a>
+      <a href="kelp.html" class="active">Kelp</a>
+      <a href="rendering.html">Rendering</a>
+      <a href="camera.html">Camera</a>
+      <a href="audio.html">Audio</a>
+      <a href="performance.html">Performance</a>
+      <a href="demos.html">Demos</a>
+      <a href="/" class="nav-play">Play PolyFish</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-header">
+  <div class="breadcrumb">Chapter 04</div>
+  <h1 class="page-title">Kelp &amp; Verlet Physics</h1>
+  <p class="page-subtitle">How soft-body kelp forests sway with ocean currents using position-based dynamics, impulse propagation, and procedural bone rigging.</p>
+</header>
+
+<article>
+
+  <div class="toc">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#why-verlet">Why Verlet?</a></li>
+      <li><a href="#basic-chain">The Basic Chain</a></li>
+      <li><a href="#ocean-current">Ocean Current Model</a></li>
+      <li><a href="#impulse">Creature Impulse &amp; Propagation</a></li>
+      <li><a href="#bone-rigging">Procedural Bone Rigging</a></li>
+      <li><a href="#lod">LOD &amp; Performance</a></li>
+    </ol>
+  </div>
+
+  <!-- ────────── Section: Why Verlet? ────────── -->
+  <h2 id="why-verlet">Why Verlet?</h2>
+
+  <p>The kelp in PolyFish started life as <a href="https://github.com/jrouwe/JoltPhysics">Jolt Physics</a> ragdoll chains  -  real rigid-body joints with <abbr title="WebAssembly - a binary instruction format that runs native-speed code in the browser">WASM</abbr> physics running in a web worker. It worked, but it was expensive. With 60 plants on screen, each with 5 joint bodies, we had 300 physics bodies just for vegetation. The overhead was murder on mobile.</p>
+
+  <p><a href="https://en.wikipedia.org/wiki/Verlet_integration">Verlet integration</a> offered a way out. Instead of simulating forces and velocities, Verlet stores just two things per node: <strong>current position</strong> and <strong>previous position</strong>. Velocity is implicit  -  it's the difference between the two. This makes the system dead simple, stable, and cheap enough to run hundreds of chains at 60fps.</p>
+
+  <div class="callout technical">
+    <p><strong>Position-Based Dynamics</strong>  -  Verlet doesn't solve force equations. Instead, it directly moves positions to satisfy constraints. Each frame: remember where you were, move by inertia, then project positions back to satisfy distance constraints. It's unconditionally stable  -  no spring explosions, no energy blowup.</p>
+  </div>
+
+  <!-- ────────── Section: Basic Chain ────────── -->
+  <h2 id="basic-chain">The Basic Chain</h2>
+
+  <p>At its core, a kelp stalk is a chain of nodes connected by rigid-length segments. The bottom node is pinned (it's rooted in the seafloor), and the rest are free to move. Each frame, the simulation runs in four steps:</p>
+
+  <p>First, <strong>inertia</strong>: each node continues moving in the direction it was already going, with a damping factor (0.82–0.90) that prevents infinite oscillation. Second, <strong>buoyancy</strong>: a gentle upward force that increases toward the tip, keeping the stalk upright. Third, <strong>external forces</strong>: ocean current and creature impulses push nodes around. Fourth, <strong>constraint solving</strong>: distance constraints snap each pair of adjacent nodes back to their rest length.</p>
+
+  <p>Drag a node in the demo below to feel how the chain responds. Notice how the base stays anchored and the constraint solver pulls everything taut:</p>
+
+  <!-- ── Demo 1: Interactive Verlet Chain ── -->
+  <div class="demo-container">
+    <canvas id="demo-chain"></canvas>
+    <div class="demo-label">Interactive Verlet Chain  -  drag any node</div>
+    <div class="demo-controls">
+      <label>Nodes <input type="range" id="ctrl-nodes" min="4" max="20" value="12" step="1"><span id="val-nodes">12</span></label>
+      <label>Inertia <input type="range" id="ctrl-inertia" min="0.5" max="0.99" value="0.88" step="0.01"><span id="val-inertia">0.88</span></label>
+      <label>Buoyancy <input type="range" id="ctrl-buoyancy" min="0" max="2" value="0.4" step="0.05"><span id="val-buoyancy">0.4</span></label>
+      <label>Stiffness <input type="range" id="ctrl-stiffness" min="1" max="8" value="3" step="1"><span id="val-stiffness">3</span></label>
+      <button id="btn-reset-chain">Reset</button>
+    </div>
+  </div>
+
+  <p>The constraint solver runs multiple iterations per frame (the "stiffness" slider). With 1 iteration, the chain is loose and stretchy. At 3+, segments lock to their rest length almost perfectly. This is the classic trade-off in position-based dynamics: more iterations = stiffer, but more expensive.</p>
+
+  <pre><code><span class="comment">// Distance constraint: snap adjacent nodes to rest length</span>
+<span class="keyword">for</span> (<span class="keyword">let</span> i = <span class="number">0</span>; i &lt; nodeCount - <span class="number">1</span>; i++) {
+  <span class="keyword">const</span> diff = b.clone().sub(a);
+  <span class="keyword">const</span> dist = diff.length();
+  <span class="keyword">const</span> error = (dist - restLength) / dist;
+
+  <span class="comment">// Weighted correction  -  anchor (mass=0) doesn't move</span>
+  a.add(diff.multiplyScalar(error * wA / (wA + wB)));
+  b.sub(diff.multiplyScalar(error * wB / (wA + wB)));
+}</code></pre>
+
+  <!-- ────────── Section: Ocean Current ────────── -->
+  <h2 id="ocean-current">Ocean Current Model</h2>
+
+  <p>Ambient kelp sway comes from a directional ocean current applied as a direct position offset  -  not a force. Each node gets pushed laterally based on its height in the chain, with a phase that shifts from base to tip. This creates the signature traveling wave shape you see in real kelp forests.</p>
+
+  <p>The current has two components: a <strong>primary wave</strong> along a dominant direction (like tidal flow), and a <strong>cross wave</strong> perpendicular to it for organic variety. A second harmonic layer adds subtle irregularity. Together with per-plant randomized phase offsets, amplitude, and speed, no two kelp stalks sway the same way.</p>
+
+  <!-- ── Demo 2: Ocean Current Visualization ── -->
+  <div class="demo-container">
+    <canvas id="demo-current"></canvas>
+    <div class="demo-label">Ocean current  -  kelp forest with varying parameters</div>
+    <div class="demo-controls">
+      <label>Amplitude <input type="range" id="ctrl-amp" min="0" max="3" value="1.5" step="0.1"><span id="val-amp">1.5</span></label>
+      <label>Speed <input type="range" id="ctrl-speed" min="0.02" max="0.5" value="0.15" step="0.01"><span id="val-speed">0.15</span></label>
+      <label>Phase Span <input type="range" id="ctrl-phase" min="0.5" max="8" value="4.0" step="0.1"><span id="val-phase">4.0</span></label>
+      <label>Dir. Bias <input type="range" id="ctrl-bias" min="0" max="1" value="0.7" step="0.05"><span id="val-bias">0.7</span></label>
+    </div>
+  </div>
+
+  <p>The magic is in the phase span parameter. It controls how much the wave's phase shifts from the base to the tip. A low value makes the whole stalk lean together like a rigid pole. A high value creates a whip-like traveling wave where the base leads and the tip follows a full cycle behind. The game uses 4.0 radians  -  about 230° of phase shift  -  which gives a natural flowing-seaweed look.</p>
+
+  <p>A gentle restoring spring pulls each node back toward its rest position. The XZ spring is very loose (0.008) so the stalk can sway freely, while the Y spring is stronger (0.06) to keep things upright. The bottom three nodes get an additional pin force (50% → 0%) that keeps the base grounded while the tip whips freely.</p>
+
+  <!-- ────────── Section: Creature Impulse ────────── -->
+  <h2 id="impulse">Creature Impulse &amp; Propagation</h2>
+
+  <p>When a fish swims through kelp, it should push the fronds aside. The system handles this through two mechanisms: <strong>impulse injection</strong> and <strong>neighbor propagation</strong>.</p>
+
+  <p>When a creature enters a node's collision radius, an impulse is applied in the creature's velocity direction  -  the kelp gets swept into its wake. A small outward push prevents tunneling. The impulse then <strong>spreads to neighbors</strong> each frame, creating a ripple that travels up and down the chain. Meanwhile, all impulses decay exponentially (0.88× per frame), so the disturbance fades naturally.</p>
+
+  <!-- ── Demo 3: Impulse Propagation ── -->
+  <div class="demo-container">
+    <canvas id="demo-impulse"></canvas>
+    <div class="demo-label">Creature impulse - fish pushes kelp aside as it swims through</div>
+    <div class="demo-controls">
+      <label>Decay <input type="range" id="ctrl-decay" min="0.7" max="0.99" value="0.88" step="0.01"><span id="val-decay">0.88</span></label>
+      <label>Spread <input type="range" id="ctrl-spread" min="0" max="0.8" value="0.2" step="0.05"><span id="val-spread">0.2</span></label>
+      <label>Strength <input type="range" id="ctrl-str" min="0.1" max="3" value="1.0" step="0.1"><span id="val-str">1.0</span></label>
+    </div>
+  </div>
+
+  <p>The spread parameter (0.2 in the game) keeps impulses localized  -  a bump at the middle of the stalk barely reaches the base. Higher values create a telegraph effect where the whole chain reacts. The decay rate (0.88) means each impulse lasts about 20 frames before disappearing, which feels like a natural "bounce back."</p>
+
+  <pre><code><span class="comment">// Impulse propagation: each node averages with its neighbors, then decays</span>
+<span class="keyword">for</span> (<span class="keyword">let</span> i = <span class="number">1</span>; i &lt; nodeCount; i++) {
+  <span class="keyword">let</span> avg = impulse[i];
+  <span class="keyword">let</span> count = <span class="number">1</span>;
+  <span class="keyword">if</span> (i > <span class="number">1</span>)          { avg += impulse[i-<span class="number">1</span>]; count++; }
+  <span class="keyword">if</span> (i &lt; nodeCount-<span class="number">1</span>) { avg += impulse[i+<span class="number">1</span>]; count++; }
+  avg /= count;
+
+  impulse[i] += (avg - impulse[i]) * spread;
+  impulse[i] *= decay;
+}</code></pre>
+
+  <!-- ────────── Section: Bone Rigging ────────── -->
+  <h2 id="bone-rigging">Procedural Bone Rigging</h2>
+
+  <p>The original kelp GLB model has just 5 bones  -  a root plus 4 sway bones. That's not enough for smooth deformation; you get visible kinks. A ProceduralRig system upgrades this to 13 bones (1 root + 12 sway segments) by evenly spacing them along the stalk and recomputing skin weights.</p>
+
+  <p>Each Verlet node maps to a bone. Every frame, the bone's rotation is computed by comparing the current chain direction (from node_i to node_i+1) against the rest-pose direction. The delta rotation is applied relative to the bone's rest-pose world quaternion, then converted to local space. This means the system works regardless of the mesh's original orientation  -  no assumptions about which axis is "up."</p>
+
+  <pre><code><span class="comment">// Drive bone rotation from Verlet node positions</span>
+<span class="keyword">const</span> currentDir = nodeB.clone().sub(nodeA).normalize();
+<span class="keyword">const</span> deltaQuat = <span class="keyword">new</span> Quaternion().setFromUnitVectors(restDir, currentDir);
+<span class="keyword">const</span> worldQuat = deltaQuat.multiply(restBoneWorldQuat);
+
+<span class="comment">// Convert world → local space for the bone hierarchy</span>
+<span class="keyword">const</span> localQuat = parentWorldQuat.invert().multiply(worldQuat);
+bone.quaternion.copy(localQuat);</code></pre>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">13</div>
+      <div class="stat-label">Bones per plant</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">3</div>
+      <div class="stat-label">Constraint iterations</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">0</div>
+      <div class="stat-label">Allocations per frame</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">60</div>
+      <div class="stat-label">Plants at 60fps</div>
+    </div>
+  </div>
+
+  <!-- ────────── Section: LOD ────────── -->
+  <h2 id="lod">LOD &amp; Performance</h2>
+
+  <p>Running 60 Verlet chains with 13 nodes each is fine on desktop, but on mobile it adds up. The game uses three LOD levels. <strong>LOD 0</strong> (close): full Verlet simulation every frame with 3 constraint iterations. <strong>LOD 1</strong> (medium): Verlet runs every other frame with just 1 constraint iteration. <strong>LOD 2</strong> (far): Verlet is skipped entirely, replaced by a cheap procedural sine-wave sway on the bones.</p>
+
+  <p>When transitioning back from LOD 2 to LOD 0, the Verlet chain positions are reset to match the current bone positions, preventing a jarring snap. The whole system is zero-allocation per frame  -  all temp vectors and Float32Arrays are pre-allocated in the constructor.</p>
+
+  <div class="comparison">
+    <div>
+      <h4>Before  -  Jolt Ragdoll</h4>
+      <p>300 <abbr title="WebAssembly - a binary instruction format that runs native-speed code in the browser">WASM</abbr> physics bodies for 60 plants. Worker thread overhead. Spring joints required careful tuning to avoid explosions. Expensive collision detection.</p>
+    </div>
+    <div>
+      <h4>After  -  Verlet Chain</h4>
+      <p>Pure JavaScript, zero <abbr title="WebAssembly - a binary instruction format that runs native-speed code in the browser">WASM</abbr> calls. 13 position updates + 3 constraint passes per plant. LOD reduces distant plants to a single sine call. 10× cheaper on mobile.</p>
+    </div>
+  </div>
+
+  <!-- ── Page Navigation ── -->
+  <div class="page-nav">
+    <a href="ecosystem.html">
+      <span class="nav-dir">&larr; Previous</span>
+      <span class="nav-title">Ecosystem &amp; Food Chain</span>
+    </a>
+    <a href="rendering.html">
+      <span class="nav-dir">Next &rarr;</span>
+      <span class="nav-title">Rendering &amp; Shaders</span>
+    </a>
+  </div>
+
+</article>
+
+<footer>
+  <a href="/" class="footer-play">Play PolyFish</a><br>
+  &copy; 2026 The Department of Silly Stuff, LLC
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════════
+     DEMO SCRIPTS - Now using ES6 modules
+     ══════════════════════════════════════════════════════════════ -->
+<script type="module">
+import { init as initVerletChain } from './demos/verlet-chain.js';
+import { init as initOceanCurrent } from './demos/ocean-current.js';
+import { init as initImpulsePropagation } from './demos/impulse-propagation.js';
+
+// Initialize demos when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  const chainContainer = document.querySelector('.demo-container:has(canvas#demo-chain)');
+  if (chainContainer) {
+    chainContainer.innerHTML = '';
+    initVerletChain(chainContainer);
+  }
+
+  const currentContainer = document.querySelector('.demo-container:has(canvas#demo-current)');
+  if (currentContainer) {
+    currentContainer.innerHTML = '';
+    initOceanCurrent(currentContainer);
+  }
+
+  const impulseContainer = document.querySelector('.demo-container:has(canvas#demo-impulse)');
+  if (impulseContainer) {
+    impulseContainer.innerHTML = '';
+    initImpulsePropagation(impulseContainer);
+  }
+});
+</script>
+
+</body>
+</html>

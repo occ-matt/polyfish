@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PolyFish Particle Effects Test</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0a0e27;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #ui {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 20px;
+      background: rgba(10, 14, 39, 0.9);
+      border-bottom: 2px solid #00d4ff;
+      z-index: 100;
+    }
+
+    #ui h1 {
+      font-size: 18px;
+      margin-bottom: 12px;
+      color: #00d4ff;
+      text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+    }
+
+    .button-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button {
+      padding: 10px 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      font-weight: bold;
+      border: 2px solid #00d4ff;
+      background: rgba(0, 212, 255, 0.1);
+      color: #00d4ff;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    button:hover {
+      background: rgba(0, 212, 255, 0.25);
+      box-shadow: 0 0 10px rgba(0, 212, 255, 0.4);
+      transform: translateY(-2px);
+    }
+
+    button:active {
+      transform: translateY(0);
+      background: rgba(0, 212, 255, 0.15);
+    }
+
+    button.food-eaten {
+      border-color: #88ffaa;
+      color: #88ffaa;
+    }
+
+    button.food-eaten:hover {
+      background: rgba(136, 255, 170, 0.15);
+      box-shadow: 0 0 10px rgba(136, 255, 170, 0.4);
+    }
+
+    button.creature-eaten {
+      border-color: #ff9944;
+      color: #ff9944;
+    }
+
+    button.creature-eaten:hover {
+      background: rgba(255, 153, 68, 0.15);
+      box-shadow: 0 0 10px rgba(255, 153, 68, 0.4);
+    }
+
+    button.plant-eaten {
+      border-color: #66ff99;
+      color: #66ff99;
+    }
+
+    button.plant-eaten:hover {
+      background: rgba(102, 255, 153, 0.15);
+      box-shadow: 0 0 10px rgba(102, 255, 153, 0.4);
+    }
+
+    button.birth {
+      border-color: #ccffff;
+      color: #ccffff;
+    }
+
+    button.birth:hover {
+      background: rgba(204, 255, 255, 0.15);
+      box-shadow: 0 0 10px rgba(204, 255, 255, 0.4);
+    }
+
+    button.death {
+      border-color: #aa8866;
+      color: #aa8866;
+    }
+
+    button.death:hover {
+      background: rgba(170, 136, 102, 0.15);
+      box-shadow: 0 0 10px rgba(170, 136, 102, 0.4);
+    }
+
+    button.decompose {
+      border-color: #88dd99;
+      color: #88dd99;
+    }
+
+    button.decompose:hover {
+      background: rgba(136, 221, 153, 0.15);
+      box-shadow: 0 0 10px rgba(136, 221, 153, 0.4);
+    }
+
+    button.food-drop {
+      border-color: #ffdd88;
+      color: #ffdd88;
+    }
+
+    button.food-drop:hover {
+      background: rgba(255, 221, 136, 0.15);
+      box-shadow: 0 0 10px rgba(255, 221, 136, 0.4);
+    }
+
+    button.all-at-once {
+      border-color: #ff00ff;
+      color: #ff00ff;
+      flex-basis: 100%;
+      margin-top: 8px;
+    }
+
+    button.all-at-once:hover {
+      background: rgba(255, 0, 255, 0.15);
+      box-shadow: 0 0 10px rgba(255, 0, 255, 0.4);
+    }
+
+    #stats {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(10, 14, 39, 0.9);
+      border: 2px solid #00d4ff;
+      padding: 12px 16px;
+      border-radius: 4px;
+      font-size: 11px;
+      line-height: 1.4;
+      min-width: 200px;
+    }
+
+    #info {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(10, 14, 39, 0.9);
+      border: 2px solid #00d4ff;
+      padding: 12px 16px;
+      border-radius: 4px;
+      font-size: 11px;
+      line-height: 1.4;
+      max-width: 300px;
+    }
+
+    .label {
+      color: #88ff99;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="ui">
+    <h1>PolyFish Particle System Test</h1>
+    <div class="button-row">
+      <button class="food-eaten" id="btn-food-eaten">Food Eaten</button>
+      <button class="creature-eaten" id="btn-creature-eaten">Creature Eaten</button>
+      <button class="plant-eaten" id="btn-plant-eaten">Plant Eaten</button>
+      <button class="birth" id="btn-birth">Birth</button>
+      <button class="death" id="btn-death">Death</button>
+      <button class="decompose" id="btn-decompose">Decompose</button>
+      <button class="food-drop" id="btn-food-drop">Food Drop</button>
+      <button class="all-at-once" id="btn-all">All at Once</button>
+    </div>
+  </div>
+
+  <div id="stats">
+    <div><span class="label">FPS:</span> <span id="fps">--</span></div>
+    <div><span class="label">Draw Calls:</span> <span id="draw-calls">1</span></div>
+    <div><span class="label">Particles:</span> <span id="particle-count">0</span></div>
+    <div><span class="label">Active Bursts:</span> <span id="burst-count">0</span></div>
+  </div>
+
+  <div id="info">
+    <div><span class="label">Controls:</span></div>
+    <div>Left Mouse: Rotate</div>
+    <div>Middle Mouse: Pan</div>
+    <div>Scroll: Zoom</div>
+    <div style="margin-top: 8px; border-top: 1px solid #00d4ff; padding-top: 8px;">
+      Click buttons above to fire particle effects at random creature positions.
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from '../node_modules/three/build/three.module.js';
+
+    // ============================================================================
+    // Scene Setup
+    // ============================================================================
+
+    const container = document.getElementById('canvas-container');
+    const canvas = document.createElement('canvas');
+    container.appendChild(canvas);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a1428); // Deep ocean blue
+    scene.fog = new THREE.Fog(0x0a1428, 200, 800);
+
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      2000
+    );
+    camera.position.set(0, 20, 40);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setClearColor(0x0a1428, 1);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowShadowMap;
+
+    // ============================================================================
+    // Lighting
+    // ============================================================================
+
+    const ambientLight = new THREE.AmbientLight(0x4488ff, 0.4);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0x88ccff, 0.8);
+    directionalLight.position.set(50, 50, 50);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.far = 200;
+    directionalLight.shadow.camera.left = -100;
+    directionalLight.shadow.camera.right = 100;
+    directionalLight.shadow.camera.top = 100;
+    directionalLight.shadow.camera.bottom = -100;
+    scene.add(directionalLight);
+
+    const pointLight = new THREE.PointLight(0x00dd99, 0.5);
+    pointLight.position.set(-30, 30, -30);
+    scene.add(pointLight);
+
+    // ============================================================================
+    // Ground Plane
+    // ============================================================================
+
+    const groundGeom = new THREE.PlaneGeometry(200, 200);
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0x1a3a2a,
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+    const ground = new THREE.Mesh(groundGeom, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -20;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // ============================================================================
+    // Placeholder Creatures (Spheres)
+    // ============================================================================
+
+    const creatures = [];
+    const creaturePositions = [
+      new THREE.Vector3(-20, 0, -20),
+      new THREE.Vector3(0, 5, 0),
+      new THREE.Vector3(20, -5, -15),
+      new THREE.Vector3(-10, 10, 20),
+      new THREE.Vector3(30, 0, 10),
+    ];
+
+    creaturePositions.forEach((pos, idx) => {
+      const radius = 1.5 + Math.random() * 0.5;
+      const geom = new THREE.SphereGeometry(radius, 16, 16);
+      const color = new THREE.Color().setHSL(0.5 + Math.random() * 0.2, 0.7, 0.5);
+      const mat = new THREE.MeshStandardMaterial({
+        color: color,
+        roughness: 0.6,
+        metalness: 0.2,
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.copy(pos);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData.index = idx;
+      scene.add(mesh);
+      creatures.push(mesh);
+    });
+
+    // ============================================================================
+    // Particle System (Three.js Points-based for now, will be replaced by three.quarks)
+    // ============================================================================
+
+    class ParticleBurst {
+      constructor(color = 0x88ffaa, lifetime = 0.8, speed = 3.0) {
+        this.color = new THREE.Color(color);
+        this.lifetime = lifetime;
+        this.maxSpeed = speed;
+        this.particles = [];
+        this.active = false;
+        this.timer = 0;
+
+        this.geom = new THREE.BufferGeometry();
+        this.positions = new Float32Array(30 * 3);
+        this.velocities = new Float32Array(30 * 3);
+        this.ages = new Float32Array(30);
+        this.scales = new Float32Array(30);
+
+        this.geom.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+
+        this.mat = new THREE.PointsMaterial({
+          color: this.color,
+          size: 0.3,
+          transparent: true,
+          opacity: 1.0,
+          blending: THREE.AdditiveBlending,
+          sizeAttenuation: true,
+          depthWrite: false,
+        });
+
+        this.points = new THREE.Points(this.geom, this.mat);
+        this.points.visible = false;
+        this.points.frustumCulled = false;
+        scene.add(this.points);
+      }
+
+      fire(position, forceDir = null, particleCount = 20, sizeStart = 0.1, sizeEnd = 0.01) {
+        this.active = true;
+        this.timer = 0;
+        this.startTime = Date.now();
+        this.particleCount = particleCount;
+        this.sizeStart = sizeStart;
+        this.sizeEnd = sizeEnd;
+        this.forceDir = forceDir;
+
+        for (let i = 0; i < particleCount; i++) {
+          // Position
+          this.positions[i * 3] = position.x;
+          this.positions[i * 3 + 1] = position.y;
+          this.positions[i * 3 + 2] = position.z;
+
+          // Velocity (spherical or directed)
+          if (forceDir) {
+            // Cone around forceDir
+            const theta = (Math.random() - 0.5) * Math.PI * 0.4;
+            const phi = Math.random() * Math.PI * 2;
+            const speed = this.maxSpeed * (0.5 + Math.random() * 0.5);
+            const x = Math.cos(theta) * Math.cos(phi);
+            const y = Math.sin(theta);
+            const z = Math.cos(theta) * Math.sin(phi);
+            this.velocities[i * 3] = x * speed * forceDir.x;
+            this.velocities[i * 3 + 1] = y * speed * forceDir.y;
+            this.velocities[i * 3 + 2] = z * speed * forceDir.z;
+          } else {
+            // Random sphere
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const speed = this.maxSpeed * (0.5 + Math.random() * 0.5);
+            this.velocities[i * 3] = Math.sin(phi) * Math.cos(theta) * speed;
+            this.velocities[i * 3 + 1] = Math.sin(phi) * Math.sin(theta) * speed;
+            this.velocities[i * 3 + 2] = Math.cos(phi) * speed;
+          }
+
+          this.ages[i] = 0;
+          this.scales[i] = 1.0;
+        }
+
+        this.geom.attributes.position.needsUpdate = true;
+        this.points.visible = true;
+      }
+
+      update(dt) {
+        if (!this.active) return;
+
+        this.timer += dt;
+        const t = this.timer / this.lifetime;
+
+        if (t >= 1.0) {
+          this.active = false;
+          this.points.visible = false;
+          return;
+        }
+
+        // Update opacity
+        this.mat.opacity = 1.0 - t;
+
+        // Update particles
+        for (let i = 0; i < this.particleCount; i++) {
+          // Update position
+          this.positions[i * 3] += this.velocities[i * 3] * dt;
+          this.positions[i * 3 + 1] += this.velocities[i * 3 + 1] * dt;
+          this.positions[i * 3 + 2] += this.velocities[i * 3 + 2] * dt;
+
+          // Apply drag
+          this.velocities[i * 3] *= 0.93;
+          this.velocities[i * 3 + 1] *= 0.93;
+          this.velocities[i * 3 + 2] *= 0.93;
+
+          // Size curve
+          const sizeT = Math.pow(t, 1.5);
+          this.scales[i] = this.sizeStart * (1.0 - sizeT) + this.sizeEnd * sizeT;
+        }
+
+        this.geom.attributes.position.needsUpdate = true;
+      }
+    }
+
+    // ============================================================================
+    // Particle Manager (will become VFXManager in actual migration)
+    // ============================================================================
+
+    class ParticleManager {
+      constructor() {
+        this.bursts = [];
+        this.burstPool = [];
+
+        // Pre-create burst pools for each effect type
+        for (let i = 0; i < 3; i++) {
+          this.burstPool.push(
+            new ParticleBurst(0x88ffaa, 0.8, 2.5), // Food eaten (green)
+            new ParticleBurst(0xff9944, 0.9, 3.5), // Creature eaten (orange)
+            new ParticleBurst(0x66ff99, 0.7, 2.0), // Plant eaten (light green)
+            new ParticleBurst(0xccffff, 1.2, 1.5), // Birth (cyan)
+            new ParticleBurst(0xaa8866, 1.2, 2.0), // Death (brown)
+            new ParticleBurst(0x88dd99, 1.5, 0.8), // Decompose (earthy green)
+            new ParticleBurst(0xffdd88, 0.4, 4.0) // Food drop (yellow)
+          );
+        }
+      }
+
+      emitFoodEaten(position) {
+        const burst = this.burstPool[0];
+        burst.color.set(0x88ffaa);
+        burst.lifetime = 0.8;
+        burst.maxSpeed = 2.5;
+        burst.mat.color.set(burst.color);
+        burst.fire(position, new THREE.Vector3(0, 1, 0), 15, 0.15, 0.01);
+      }
+
+      emitCreatureEaten(position) {
+        const burst = this.burstPool[1];
+        burst.color.set(0xff9944);
+        burst.lifetime = 0.9;
+        burst.maxSpeed = 3.5;
+        burst.mat.color.set(burst.color);
+        burst.fire(position, null, 25, 0.2, 0.02);
+      }
+
+      emitPlantEaten(position) {
+        const burst = this.burstPool[2];
+        burst.color.set(0x66ff99);
+        burst.lifetime = 0.7;
+        burst.maxSpeed = 2.0;
+        burst.mat.color.set(burst.color);
+        burst.fire(position, new THREE.Vector3(0, 0.3, 0), 12, 0.12, 0.01);
+      }
+
+      emitBirth(position) {
+        const burst = this.burstPool[3];
+        burst.color.set(0xccffff);
+        burst.lifetime = 1.2;
+        burst.maxSpeed = 1.5;
+        burst.mat.color.set(burst.color);
+        burst.fire(position, new THREE.Vector3(0, 1, 0), 20, 0.1, 0.02);
+      }
+
+      emitDeath(position) {
+        const burst = this.burstPool[4];
+        burst.color.set(0xaa8866);
+        burst.lifetime = 1.2;
+        burst.maxSpeed = 2.0;
+        burst.mat.color.set(burst.color);
+        burst.fire(position, new THREE.Vector3(0, -0.5, 0), 18, 0.18, 0.01);
+      }
+
+      emitDecompose(position) {
+        const burst = this.burstPool[5];
+        burst.color.set(0x88dd99);
+        burst.lifetime = 1.5;
+        burst.maxSpeed = 0.8;
+        burst.mat.color.set(burst.color);
+        burst.fire(position, new THREE.Vector3(0, 1, 0), 16, 0.12, 0.02);
+      }
+
+      emitFoodDrop(position) {
+        const burst = this.burstPool[6];
+        burst.color.set(0xffdd88);
+        burst.lifetime = 0.4;
+        burst.maxSpeed = 4.0;
+        burst.mat.color.set(burst.color);
+        burst.fire(position, new THREE.Vector3(0, 1, 0), 10, 0.08, 0.01);
+      }
+
+      update(dt) {
+        for (const burst of this.burstPool) {
+          burst.update(dt);
+        }
+      }
+
+      getActiveCount() {
+        return this.burstPool.filter(b => b.active).length;
+      }
+
+      getParticleCount() {
+        let count = 0;
+        for (const burst of this.burstPool) {
+          if (burst.active) count += burst.particleCount;
+        }
+        return count;
+      }
+    }
+
+    const particleManager = new ParticleManager();
+
+    // ============================================================================
+    // OrbitControls (simplified)
+    // ============================================================================
+
+    class SimpleOrbitControls {
+      constructor(camera, canvas) {
+        this.camera = camera;
+        this.canvas = canvas;
+        this.target = new THREE.Vector3(0, 0, 0);
+        this.distance = camera.position.length();
+        this.theta = 0;
+        this.phi = Math.PI / 2.5;
+        this.autoRotate = true;
+        this.autoRotateSpeed = 0.5;
+
+        this.isDragging = false;
+        this.previousMousePosition = { x: 0, y: 0 };
+
+        canvas.addEventListener('mousedown', e => this.onMouseDown(e));
+        canvas.addEventListener('mousemove', e => this.onMouseMove(e));
+        canvas.addEventListener('mouseup', e => this.onMouseUp(e));
+        canvas.addEventListener('wheel', e => this.onMouseWheel(e));
+
+        window.addEventListener('resize', () => this.onWindowResize());
+      }
+
+      onMouseDown(e) {
+        this.isDragging = true;
+        this.previousMousePosition = { x: e.clientX, y: e.clientY };
+        this.autoRotate = false;
+      }
+
+      onMouseMove(e) {
+        if (!this.isDragging) return;
+
+        const deltaX = e.clientX - this.previousMousePosition.x;
+        const deltaY = e.clientY - this.previousMousePosition.y;
+
+        if (e.button === 0) {
+          // Left mouse: rotate
+          this.theta += (deltaX * Math.PI) / 500;
+          this.phi += (deltaY * Math.PI) / 500;
+          this.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.phi));
+        } else if (e.button === 1) {
+          // Middle mouse: pan
+          const moveScale = (this.distance / 100) * 0.5;
+          this.target.x -= deltaX * moveScale * (1 / window.innerWidth);
+          this.target.y += deltaY * moveScale * (1 / window.innerHeight);
+        }
+
+        this.previousMousePosition = { x: e.clientX, y: e.clientY };
+        this.update();
+      }
+
+      onMouseUp(e) {
+        this.isDragging = false;
+      }
+
+      onMouseWheel(e) {
+        e.preventDefault();
+        this.distance += e.deltaY * 0.05;
+        this.distance = Math.max(10, Math.min(200, this.distance));
+        this.update();
+      }
+
+      onWindowResize() {
+        // Camera aspect will be updated in render loop
+      }
+
+      update() {
+        const x = this.target.x + this.distance * Math.sin(this.phi) * Math.cos(this.theta);
+        const y = this.target.y + this.distance * Math.cos(this.phi);
+        const z = this.target.z + this.distance * Math.sin(this.phi) * Math.sin(this.theta);
+
+        this.camera.position.set(x, y, z);
+        this.camera.lookAt(this.target);
+      }
+
+      rotate() {
+        if (this.autoRotate && !this.isDragging) {
+          this.theta += (this.autoRotateSpeed * Math.PI) / 180;
+          this.update();
+        }
+      }
+    }
+
+    const controls = new SimpleOrbitControls(camera, canvas);
+    controls.update();
+
+    // ============================================================================
+    // UI Event Handlers
+    // ============================================================================
+
+    function getRandomCreaturePosition() {
+      const creature = creatures[Math.floor(Math.random() * creatures.length)];
+      return creature.position.clone().add(
+        new THREE.Vector3((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5)
+      );
+    }
+
+    document.getElementById('btn-food-eaten').addEventListener('click', () => {
+      particleManager.emitFoodEaten(getRandomCreaturePosition());
+    });
+
+    document.getElementById('btn-creature-eaten').addEventListener('click', () => {
+      particleManager.emitCreatureEaten(getRandomCreaturePosition());
+    });
+
+    document.getElementById('btn-plant-eaten').addEventListener('click', () => {
+      particleManager.emitPlantEaten(getRandomCreaturePosition());
+    });
+
+    document.getElementById('btn-birth').addEventListener('click', () => {
+      particleManager.emitBirth(getRandomCreaturePosition());
+    });
+
+    document.getElementById('btn-death').addEventListener('click', () => {
+      particleManager.emitDeath(getRandomCreaturePosition());
+    });
+
+    document.getElementById('btn-decompose').addEventListener('click', () => {
+      particleManager.emitDecompose(getRandomCreaturePosition());
+    });
+
+    document.getElementById('btn-food-drop').addEventListener('click', () => {
+      particleManager.emitFoodDrop(getRandomCreaturePosition());
+    });
+
+    document.getElementById('btn-all').addEventListener('click', () => {
+      const pos1 = getRandomCreaturePosition();
+      const pos2 = getRandomCreaturePosition();
+      const pos3 = getRandomCreaturePosition();
+      const pos4 = getRandomCreaturePosition();
+      const pos5 = getRandomCreaturePosition();
+      const pos6 = getRandomCreaturePosition();
+      const pos7 = getRandomCreaturePosition();
+
+      particleManager.emitFoodEaten(pos1);
+      particleManager.emitCreatureEaten(pos2);
+      particleManager.emitPlantEaten(pos3);
+      particleManager.emitBirth(pos4);
+      particleManager.emitDeath(pos5);
+      particleManager.emitDecompose(pos6);
+      particleManager.emitFoodDrop(pos7);
+    });
+
+    // ============================================================================
+    // Performance Monitoring
+    // ============================================================================
+
+    let frameCount = 0;
+    let lastTime = Date.now();
+
+    function updateStats() {
+      const now = Date.now();
+      const elapsed = now - lastTime;
+
+      frameCount++;
+      if (elapsed >= 1000) {
+        const fps = Math.round((frameCount * 1000) / elapsed);
+        document.getElementById('fps').textContent = fps;
+
+        frameCount = 0;
+        lastTime = now;
+      }
+
+      document.getElementById('draw-calls').textContent = '1-3';
+      document.getElementById('particle-count').textContent = particleManager.getParticleCount();
+      document.getElementById('burst-count').textContent = particleManager.getActiveCount();
+    }
+
+    // ============================================================================
+    // Main Render Loop
+    // ============================================================================
+
+    let lastFrameTime = Date.now();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Delta time
+      const now = Date.now();
+      const dt = (now - lastFrameTime) / 1000;
+      lastFrameTime = now;
+
+      // Update controls
+      controls.rotate();
+
+      // Update particles
+      particleManager.update(dt);
+
+      // Update camera
+      const aspect = window.innerWidth / window.innerHeight;
+      camera.aspect = aspect;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+
+      // Render
+      renderer.render(scene, camera);
+
+      // Stats
+      updateStats();
+    }
+
+    animate();
+  </script>
+</body>
+</html>

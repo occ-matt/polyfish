@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Verlet Chain Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a1929; }
+    canvas { display: block; }
+    #info {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      color: rgba(255, 255, 255, 0.7);
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      pointer-events: none;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">Verlet Chain Test — Left-click: push | Right-click: fish swim-by | Scroll: zoom</div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+    import { VerletChain } from './src/core/VerletChain.js';
+
+    // ── Scene setup ─────────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a1929);
+    scene.fog = new THREE.Fog(0x0a1929, 10, 50);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(5, 4, 8);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 3, 0);
+    controls.update();
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0x334466, 2.0));
+    const dirLight = new THREE.DirectionalLight(0xaaccff, 1.5);
+    dirLight.position.set(5, 10, 5);
+    scene.add(dirLight);
+
+    // Ground plane
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(20, 20),
+      new THREE.MeshStandardMaterial({ color: 0x2a5a4a, roughness: 0.9 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    // ── Create Verlet chains ────────────────────────────────
+    const chains = [];
+    const chainVisuals = [];
+
+    function createChainVisual(chain, color) {
+      const group = new THREE.Group();
+
+      // Spheres at each node
+      const sphereGeo = new THREE.SphereGeometry(0.08, 8, 6);
+      const sphereMat = new THREE.MeshStandardMaterial({ color, roughness: 0.4 });
+      const spheres = [];
+      for (let i = 0; i < chain.nodeCount; i++) {
+        const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+        group.add(sphere);
+        spheres.push(sphere);
+      }
+
+      // Line connecting nodes
+      const lineGeo = new THREE.BufferGeometry();
+      const linePositions = new Float32Array(chain.nodeCount * 3);
+      lineGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+      const lineMat = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+      const line = new THREE.Line(lineGeo, lineMat);
+      group.add(line);
+
+      // Thin cylinders between nodes for volume
+      const cylGeo = new THREE.CylinderGeometry(0.04, 0.04, 1, 6);
+      const cylMat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
+      const cyls = [];
+      for (let i = 0; i < chain.nodeCount - 1; i++) {
+        const cyl = new THREE.Mesh(cylGeo, cylMat);
+        group.add(cyl);
+        cyls.push(cyl);
+      }
+
+      scene.add(group);
+      return { group, spheres, line, lineGeo, linePositions, cyls };
+    }
+
+    // Chain 1: kelp (wide wave, moderate speed)
+    const chain1 = new VerletChain(12, {
+      currentAmplitude: 1.8,
+      currentSpeed: 0.4,
+      currentPhaseSpan: 3.5,
+      stiffness: 2,
+    });
+    chain1.init(new THREE.Vector3(-2, 0, 0), new THREE.Vector3(0, 1, 0), 0.6);
+    chains.push(chain1);
+    chainVisuals.push(createChainVisual(chain1, 0x33aa55));
+
+    // Chain 2: floppy seagrass (tight wave, lazy)
+    const chain2 = new VerletChain(16, {
+      currentAmplitude: 2.2,
+      currentSpeed: 0.3,
+      currentPhaseSpan: 5.0,
+      stiffness: 1,
+    });
+    chain2.init(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0), 0.45);
+    chains.push(chain2);
+    chainVisuals.push(createChainVisual(chain2, 0x55cc77));
+
+    // Chain 3: stiffer stalk (smaller wave)
+    const chain3 = new VerletChain(8, {
+      currentAmplitude: 0.8,
+      currentSpeed: 0.5,
+      currentPhaseSpan: 2.0,
+      stiffness: 3,
+    });
+    chain3.init(new THREE.Vector3(2, 0, 0), new THREE.Vector3(0, 1, 0), 0.8);
+    chains.push(chain3);
+    chainVisuals.push(createChainVisual(chain3, 0x22aa88));
+
+    // ── Interaction sphere (mouse-driven pusher) ────────────
+    const pusherGeo = new THREE.SphereGeometry(0.5, 16, 12);
+    const pusherMat = new THREE.MeshStandardMaterial({
+      color: 0xff6644,
+      transparent: true,
+      opacity: 0.5,
+      roughness: 0.3,
+    });
+    const pusher = new THREE.Mesh(pusherGeo, pusherMat);
+    pusher.visible = false;
+    scene.add(pusher);
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let mouseDown = false;
+
+    // Fish swim-by visual (right-click spawns a fast-moving sphere that pushes chains)
+    const fishGeo = new THREE.SphereGeometry(0.3, 8, 6);
+    const fishMat = new THREE.MeshStandardMaterial({ color: 0x44aaff, roughness: 0.3 });
+    const swimBys = []; // active swim-by objects: { mesh, velocity, life }
+
+    renderer.domElement.addEventListener('mousedown', (e) => {
+      if (e.button === 0) { mouseDown = true; pusher.visible = true; }
+    });
+    renderer.domElement.addEventListener('mouseup', (e) => {
+      if (e.button === 0) { mouseDown = false; pusher.visible = false; }
+    });
+    renderer.domElement.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      // Spawn a fish swim-by at click position, moving in a random horizontal direction
+      raycaster.setFromCamera(mouse, camera);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+      const hit = new THREE.Vector3();
+      raycaster.ray.intersectPlane(plane, hit);
+      if (hit) {
+        const mesh = new THREE.Mesh(fishGeo, fishMat);
+        mesh.position.copy(hit);
+        // Random horizontal velocity (simulates a fish darting past)
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 4 + Math.random() * 3;
+        const vel = new THREE.Vector3(Math.cos(angle) * speed, 0, Math.sin(angle) * speed);
+        scene.add(mesh);
+        swimBys.push({ mesh, velocity: vel, life: 2.0 });
+      }
+    });
+    renderer.domElement.addEventListener('mousemove', (e) => {
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ── Update visuals from chain positions ──────────────────
+    function updateVisuals(chain, vis) {
+      for (let i = 0; i < chain.nodeCount; i++) {
+        vis.spheres[i].position.copy(chain.pos[i]);
+        vis.linePositions[i * 3 + 0] = chain.pos[i].x;
+        vis.linePositions[i * 3 + 1] = chain.pos[i].y;
+        vis.linePositions[i * 3 + 2] = chain.pos[i].z;
+      }
+      vis.lineGeo.attributes.position.needsUpdate = true;
+
+      // Cylinders between nodes
+      const _mid = new THREE.Vector3();
+      const _d = new THREE.Vector3();
+      const _yAxis = new THREE.Vector3(0, 1, 0);
+      for (let i = 0; i < chain.nodeCount - 1; i++) {
+        const a = chain.pos[i];
+        const b = chain.pos[i + 1];
+        _mid.lerpVectors(a, b, 0.5);
+        _d.subVectors(b, a);
+        const len = _d.length();
+        vis.cyls[i].position.copy(_mid);
+        vis.cyls[i].scale.set(1, len, 1);
+        if (len > 0.001) {
+          _d.normalize();
+          vis.cyls[i].quaternion.setFromUnitVectors(_yAxis, _d);
+        }
+      }
+    }
+
+    // ── Animation loop ──────────────────────────────────────
+    const clock = new THREE.Clock();
+    const _swayForce = new THREE.Vector3();
+    const _pusherPos = new THREE.Vector3();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 1 / 30);
+      const elapsed = clock.elapsedTime;
+
+      // Sway force (gentle procedural current)
+      _swayForce.set(
+        Math.sin(elapsed * 0.5) * 1.5 + Math.sin(elapsed * 1.3) * 0.5,
+        0,
+        Math.cos(elapsed * 0.7) * 1.0
+      );
+
+      // Update pusher position from mouse raycast
+      if (mouseDown) {
+        raycaster.setFromCamera(mouse, camera);
+        // Project onto a vertical plane through the chains
+        const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        const intersection = new THREE.Vector3();
+        raycaster.ray.intersectPlane(plane, intersection);
+        if (intersection) {
+          pusher.position.copy(intersection);
+          _pusherPos.copy(intersection);
+        }
+      }
+
+      // Update fish swim-bys
+      for (let si = swimBys.length - 1; si >= 0; si--) {
+        const sb = swimBys[si];
+        sb.mesh.position.addScaledVector(sb.velocity, dt);
+        sb.life -= dt;
+        // Push chains as the fish passes through
+        for (const chain of chains) {
+          chain.pushFrom(sb.mesh.position, 1.2, 2.0);
+        }
+        if (sb.life <= 0) {
+          scene.remove(sb.mesh);
+          swimBys.splice(si, 1);
+        }
+      }
+
+      // Step all chains
+      for (let ci = 0; ci < chains.length; ci++) {
+        const chain = chains[ci];
+
+        // The ocean current inside the chain handles all wave motion.
+        // Each chain gets a unique phase offset for visual variety.
+        chain.update(dt, elapsed, ci * 2.0);
+
+        // Push from mouse sphere
+        if (mouseDown) {
+          chain.pushFrom(_pusherPos, 1.0, 1.5);
+        }
+
+        updateVisuals(chain, chainVisuals[ci]);
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>

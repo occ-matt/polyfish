@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PolyFish Model Viewer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #eee; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+  canvas { display: block; }
+
+  #ui {
+    position: absolute; top: 0; left: 0; width: 320px; height: 100vh;
+    background: rgba(10,10,30,0.92); padding: 16px; overflow-y: auto;
+    border-right: 1px solid #334;
+  }
+  h2 { font-size: 15px; color: #8af; margin: 12px 0 6px; border-bottom: 1px solid #334; padding-bottom: 4px; }
+  h3 { font-size: 13px; color: #aaa; margin: 8px 0 4px; }
+  label { display: block; font-size: 12px; color: #aaa; margin-top: 6px; }
+  select, input[type=range], input[type=number], button {
+    width: 100%; margin-top: 2px; font-size: 12px;
+    background: #222; color: #eee; border: 1px solid #444; padding: 4px;
+  }
+  input[type=range] { padding: 0; }
+  button { cursor: pointer; padding: 6px; background: #335; border-color: #558; margin-top: 8px; }
+  button:hover { background: #448; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row label { flex: 1; }
+  .row input { flex: 2; }
+  .val { font-size: 11px; color: #8af; min-width: 40px; text-align: right; }
+  #bone-list { max-height: 180px; overflow-y: auto; border: 1px solid #333; padding: 4px; margin-top: 4px; }
+  .bone-item {
+    font-size: 11px; padding: 3px 4px; cursor: pointer; border-radius: 3px;
+  }
+  .bone-item:hover { background: #335; }
+  .bone-item.selected { background: #448; color: #fff; }
+  .bone-item.animated { color: #8f8; }
+  #info { font-size: 11px; color: #888; margin-top: 12px; line-height: 1.5; }
+  .axis-btn { width: auto; flex: 1; padding: 4px 8px; }
+  .axis-btn.active { background: #558; border-color: #88f; color: #fff; }
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <h2>PolyFish Model Viewer</h2>
+
+  <label>Model</label>
+  <select id="model-select">
+    <option value="fish">fish_rigged</option>
+    <option value="dolphin">dolphin_rigged</option>
+    <option value="manatee">manatee_rigged</option>
+    <option value="kelp">kelp_rigged</option>
+    <option value="food">sphere_fancy</option>
+    <option value="foodAlt">pointy_thing_02</option>
+    <option value="logo">polyFish_logo</option>
+  </select>
+
+  <h2>Skeleton</h2>
+  <div id="bone-list"></div>
+  <div id="selected-bone-info"></div>
+
+  <h2>Procedural Animation</h2>
+  <button id="toggle-anim">Start Animation</button>
+
+  <label>Axis</label>
+  <div class="row">
+    <button class="axis-btn" data-axis="x">X</button>
+    <button class="axis-btn active" data-axis="z">Z</button>
+    <button class="axis-btn" data-axis="y">Y</button>
+    <button class="axis-btn" data-axis="xz">X+Z (Unity)</button>
+  </div>
+
+  <div class="row">
+    <label>Frequency</label>
+    <input type="range" id="freq" min="0.05" max="5" step="0.05" value="0.2">
+    <span class="val" id="freq-val">0.20</span>
+  </div>
+  <div class="row">
+    <label>Amplitude</label>
+    <input type="range" id="amp" min="0.1" max="5" step="0.1" value="1.5">
+    <span class="val" id="amp-val">1.50</span>
+  </div>
+  <div class="row">
+    <label>Rot Limit (deg)</label>
+    <input type="range" id="rotlim" min="1" max="90" step="1" value="20">
+    <span class="val" id="rotlim-val">20</span>
+  </div>
+  <div class="row">
+    <label>Offset</label>
+    <input type="range" id="offset" min="0" max="10" step="0.1" value="0">
+    <span class="val" id="offset-val">0.0</span>
+  </div>
+  <div class="row">
+    <label>Cascade per bone</label>
+    <input type="range" id="cascade" min="0" max="2" step="0.05" value="0.4">
+    <span class="val" id="cascade-val">0.40</span>
+  </div>
+
+  <button id="apply-all-bones">Apply to All Bones</button>
+  <button id="reset-pose">Reset to Bind Pose</button>
+
+  <h2>Display</h2>
+  <button id="toggle-skeleton">Show/Hide Skeleton Helper</button>
+  <button id="toggle-wireframe">Toggle Wireframe</button>
+  <button id="toggle-axes">Toggle Bone Axes</button>
+
+  <div id="info">
+    Click a bone in the list to highlight it.<br>
+    Use "Apply to All Bones" to preview the swimming animation with cascading offsets.
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "/node_modules/three/build/three.module.js",
+    "three/examples/jsm/": "/node_modules/three/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+// ── Scene setup ──
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.setClearColor(0x0a2040);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0a2040, 0.008);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 500);
+camera.position.set(3, 2, 5);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.target.set(0, 0.5, 0);
+
+// Lights
+scene.add(new THREE.AmbientLight(0x446688, 0.8));
+const dir = new THREE.DirectionalLight(0xaaccff, 1.0);
+dir.position.set(5, 10, 5);
+scene.add(dir);
+
+// Ground grid
+const grid = new THREE.GridHelper(20, 20, 0x224466, 0x112233);
+scene.add(grid);
+
+// Axes helper at origin
+scene.add(new THREE.AxesHelper(2));
+
+// ── State ──
+const loader = new GLTFLoader();
+let currentModel = null;
+let skeletonHelper = null;
+let bones = [];
+let boneAxesHelpers = [];
+let selectedBone = null;
+let animRunning = false;
+let animControllers = [];
+const clock = new THREE.Clock();
+
+const MODEL_URLS = {
+  fish: '/models/fish_rigged.glb',
+  dolphin: '/models/dolphin_rigged.glb',
+  manatee: '/models/manatee_rigged.glb',
+  kelp: '/models/kelp_rigged.glb',
+  food: '/models/sphere_fancy.glb',
+  foodAlt: '/models/pointy_thing_02.glb',
+  logo: '/models/polyFish_logo.glb',
+};
+
+// ── Model Loading ──
+async function loadModel(name) {
+  // Clean up old
+  if (currentModel) {
+    scene.remove(currentModel);
+    currentModel.traverse(c => {
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) {
+        if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
+        else c.material.dispose();
+      }
+    });
+  }
+  if (skeletonHelper) { scene.remove(skeletonHelper); skeletonHelper = null; }
+  clearBoneAxes();
+  stopAnim();
+  bones = [];
+  selectedBone = null;
+
+  const url = MODEL_URLS[name];
+  if (!url) return;
+
+  try {
+    const gltf = await loader.loadAsync(url);
+    currentModel = gltf.scene;
+    scene.add(currentModel);
+
+    // Collect bones
+    currentModel.traverse(child => {
+      if (child.isBone) bones.push(child);
+    });
+
+    // Auto-fit camera
+    const box = new THREE.Box3().setFromObject(currentModel);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    camera.position.set(center.x + maxDim * 1.5, center.y + maxDim * 0.8, center.z + maxDim * 2);
+    controls.target.copy(center);
+
+    // Log model info
+    let meshCount = 0, vertCount = 0, hasSkin = false;
+    currentModel.traverse(c => {
+      if (c.isMesh) { meshCount++; vertCount += c.geometry.attributes.position?.count || 0; }
+      if (c.isSkinnedMesh) hasSkin = true;
+    });
+    console.log(`[Viewer] ${name}: ${meshCount} meshes, ${vertCount} verts, ${bones.length} bones, skinned=${hasSkin}`);
+    console.log(`[Viewer] Bounding box: ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`);
+
+    updateBoneList();
+
+    // Create skeleton helper (hidden by default)
+    if (bones.length > 0) {
+      skeletonHelper = new THREE.SkeletonHelper(currentModel);
+      skeletonHelper.visible = false;
+      scene.add(skeletonHelper);
+    }
+  } catch (err) {
+    console.error(`Failed to load ${name}:`, err);
+  }
+}
+
+// ── Bone List UI ──
+function updateBoneList() {
+  const list = document.getElementById('bone-list');
+  list.innerHTML = '';
+  bones.forEach((bone, i) => {
+    const div = document.createElement('div');
+    div.className = 'bone-item';
+    div.textContent = `${i}: ${bone.name}`;
+    div.addEventListener('click', () => selectBone(bone, div));
+    list.appendChild(div);
+  });
+}
+
+function selectBone(bone, element) {
+  // Deselect previous
+  document.querySelectorAll('.bone-item.selected').forEach(el => el.classList.remove('selected'));
+  element.classList.add('selected');
+  selectedBone = bone;
+
+  const info = document.getElementById('selected-bone-info');
+  const pos = bone.position;
+  const rot = bone.rotation;
+  const scl = bone.scale;
+  info.innerHTML = `
+    <h3>${bone.name}</h3>
+    <div style="font-size:11px;color:#aaa;line-height:1.6">
+      pos: ${pos.x.toFixed(3)}, ${pos.y.toFixed(3)}, ${pos.z.toFixed(3)}<br>
+      rot: ${THREE.MathUtils.radToDeg(rot.x).toFixed(1)}°, ${THREE.MathUtils.radToDeg(rot.y).toFixed(1)}°, ${THREE.MathUtils.radToDeg(rot.z).toFixed(1)}°<br>
+      scale: ${scl.x.toFixed(3)}, ${scl.y.toFixed(3)}, ${scl.z.toFixed(3)}<br>
+      children: ${bone.children.filter(c => c.isBone).map(c => c.name).join(', ') || 'none'}
+    </div>
+  `;
+}
+
+// ── Animation ──
+function getAxisVector() {
+  const active = document.querySelector('.axis-btn.active');
+  const a = active?.dataset.axis || 'z';
+  if (a === 'x') return new THREE.Vector3(1, 0, 0);
+  if (a === 'y') return new THREE.Vector3(0, 1, 0);
+  if (a === 'z') return new THREE.Vector3(0, 0, 1);
+  if (a === 'xz') return new THREE.Vector3(0.25, 0, 1); // Unity default
+  return new THREE.Vector3(0, 0, 1);
+}
+
+function getParams() {
+  return {
+    frequency: parseFloat(document.getElementById('freq').value),
+    amplitude: parseFloat(document.getElementById('amp').value),
+    rotationLimit: parseFloat(document.getElementById('rotlim').value),
+    offset: parseFloat(document.getElementById('offset').value),
+    cascade: parseFloat(document.getElementById('cascade').value),
+  };
+}
+
+class ProcRotation {
+  constructor(target, config) {
+    this.target = target;
+    this.axis = config.axis.clone();
+    this.frequency = config.frequency;
+    this.amplitude = config.amplitude;
+    this.offset = config.offset;
+    this.rotationLimit = config.rotationLimit;
+    this.timer = 0;
+    this.baseRotation = target.rotation.clone();
+  }
+  update(dt) {
+    this.timer += dt;
+    // Match Unity: bobbingCurve.Evaluate((timer + offset) * frequency) * amplitude * rotationLimit
+    // Unity AnimationCurve is typically a sine-like wave; we approximate with sin
+    const sample = Math.sin((this.timer + this.offset) * this.frequency * Math.PI * 2)
+                   * this.amplitude * this.rotationLimit;
+    const rad = THREE.MathUtils.degToRad(sample);
+    this.target.rotation.set(
+      this.baseRotation.x + this.axis.x * rad,
+      this.baseRotation.y + this.axis.y * rad,
+      this.baseRotation.z + this.axis.z * rad
+    );
+  }
+  reset() {
+    this.target.rotation.copy(this.baseRotation);
+  }
+}
+
+function startAnimAllBones() {
+  stopAnim();
+  const params = getParams();
+  const axis = getAxisVector();
+
+  bones.forEach((bone, i) => {
+    const ctrl = new ProcRotation(bone, {
+      axis,
+      frequency: params.frequency,
+      amplitude: params.amplitude + i * 0.1,
+      offset: params.offset + i * params.cascade,
+      rotationLimit: params.rotationLimit,
+    });
+    animControllers.push(ctrl);
+  });
+  animRunning = true;
+  document.getElementById('toggle-anim').textContent = 'Stop Animation';
+
+  // Mark animated bones
+  document.querySelectorAll('.bone-item').forEach((el, i) => {
+    if (i < bones.length) el.classList.add('animated');
+  });
+}
+
+function stopAnim() {
+  animControllers.forEach(c => c.reset());
+  animControllers = [];
+  animRunning = false;
+  document.getElementById('toggle-anim').textContent = 'Start Animation';
+  document.querySelectorAll('.bone-item.animated').forEach(el => el.classList.remove('animated'));
+}
+
+// ── Bone Axes Helpers ──
+function clearBoneAxes() {
+  boneAxesHelpers.forEach(h => scene.remove(h));
+  boneAxesHelpers = [];
+}
+
+function toggleBoneAxes() {
+  if (boneAxesHelpers.length > 0) {
+    clearBoneAxes();
+    return;
+  }
+  bones.forEach(bone => {
+    const helper = new THREE.AxesHelper(0.3);
+    bone.add(helper);
+    boneAxesHelpers.push(helper);
+  });
+}
+
+// ── UI Event Handlers ──
+document.getElementById('model-select').addEventListener('change', (e) => {
+  loadModel(e.target.value);
+});
+
+document.getElementById('toggle-anim').addEventListener('click', () => {
+  if (animRunning) stopAnim();
+  else startAnimAllBones();
+});
+
+document.getElementById('apply-all-bones').addEventListener('click', () => {
+  startAnimAllBones();
+});
+
+document.getElementById('reset-pose').addEventListener('click', () => {
+  stopAnim();
+});
+
+document.getElementById('toggle-skeleton').addEventListener('click', () => {
+  if (skeletonHelper) skeletonHelper.visible = !skeletonHelper.visible;
+});
+
+document.getElementById('toggle-wireframe').addEventListener('click', () => {
+  if (!currentModel) return;
+  currentModel.traverse(c => {
+    if (c.isMesh && c.material) c.material.wireframe = !c.material.wireframe;
+  });
+});
+
+document.getElementById('toggle-axes').addEventListener('click', () => {
+  toggleBoneAxes();
+});
+
+// Axis buttons
+document.querySelectorAll('.axis-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.axis-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (animRunning) startAnimAllBones(); // Re-apply with new axis
+  });
+});
+
+// Sliders
+['freq', 'amp', 'rotlim', 'offset', 'cascade'].forEach(id => {
+  const el = document.getElementById(id);
+  const valEl = document.getElementById(id + '-val');
+  el.addEventListener('input', () => {
+    valEl.textContent = parseFloat(el.value).toFixed(2);
+    if (animRunning) startAnimAllBones(); // live update
+  });
+});
+
+// ── Render Loop ──
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  controls.update();
+
+  if (animRunning) {
+    animControllers.forEach(c => c.update(dt));
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ── Resize ──
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ── Init ──
+loadModel('fish');
+animate();
+</script>
+</body>
+</html>

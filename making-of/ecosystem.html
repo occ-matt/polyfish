@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ecosystem & Food Chain  -  Making of PolyFish</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">Making of <span>PolyFish</span></a>
+    <a href="/" class="nav-play-mobile">&#9654; Play PolyFish</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+    </button>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="origins.html">Origins</a>
+      <a href="ai.html">AI Collab</a>
+      <a href="creatures.html">Creatures</a>
+      <a href="ecosystem.html" class="active">Ecosystem</a>
+      <a href="kelp.html">Kelp</a>
+      <a href="rendering.html">Rendering</a>
+      <a href="camera.html">Camera</a>
+      <a href="audio.html">Audio</a>
+      <a href="performance.html">Performance</a>
+      <a href="demos.html">Demos</a>
+      <a href="/" class="nav-play">Play PolyFish</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-header">
+  <div class="breadcrumb">Chapter 03</div>
+  <h1 class="page-title">Ecosystem &amp; Food Chain</h1>
+  <p class="page-subtitle">Building a self-sustaining underwater world with efficient feeding mechanics, energy-based metabolism, predator-prey dynamics, and population balance.</p>
+</header>
+
+<article>
+
+  <div class="toc">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#food-web">The Food Web</a></li>
+      <li><a href="#feeding-reproduction">Feeding &amp; Reproduction</a></li>
+      <li><a href="#energy-metabolism">Energy &amp; Metabolism</a></li>
+      <li><a href="#plant-lifecycle">Plant Lifecycle</a></li>
+      <li><a href="#population-balance">Population Balance</a></li>
+    </ol>
+  </div>
+
+  <!-- ────────── Section: The Food Web ────────── -->
+  <h2 id="food-web">The Food Web</h2>
+
+  <p>PolyFish's ecosystem runs on a short loop: creatures seek the nearest food source, eat it, and that single act of eating triggers everything else - poop, reproduction, population growth. The food web fans out from there. <strong>Plants</strong> produce food particles. <strong>Fish</strong> eat the food. <strong>Dolphins</strong> hunt fish. <strong>Manatees</strong> eat plants directly. Waste from any creature can seed new plants, closing the loop.</p>
+
+  <p>Everything is driven by <strong>collisions</strong>. Food collides with a creature's mouth trigger, causing it to eat. Poop collides with the terrain, which then decides whether it should grow a plant, bounce, or do nothing. Because these outcomes depend on where things physically land, each session plays out differently - even though the overall story and macro-behavior remain the same.</p>
+
+  <p>This physics-driven approach means the ecosystem doesn't need scripted events or timers. Efficient <a href="performance.html#spatial">spatial hashing</a> keeps collision queries fast across 100+ creatures.</p>
+
+  <!-- ────────── Section: Feeding & Reproduction ────────── -->
+  <h2 id="feeding-reproduction">Feeding &amp; Reproduction</h2>
+
+  <p>Each creature carries a <strong>food counter</strong> that increments each time it consumes food within its mouth radius. When the counter reaches a reproduction threshold, the creature spawns offspring (up to 12) and resets the counter. A 10-second cooldown prevents spam.</p>
+
+  <p><strong>Feeding is spatial.</strong> Every frame, a creature queries its grid cell and nearby cells for food particles. If any are within the mouth radius, the particle is destroyed and the food counter increments. Fish have a tight mouth radius of 0.15 units, requiring them to get right on top of food. Dolphins and manatees have a wider 0.5-unit radius, making feeding easier for the larger creatures.</p>
+
+  <pre><code><span class="comment">// Query nearby cells for food particles</span>
+<span class="keyword">const</span> cellHash = spatialHash(creature.x, creature.z, cellSize);
+<span class="keyword">const</span> nearbyFoods = grid.get(cellHash) || [];
+
+<span class="keyword">for</span> (<span class="keyword">let</span> food <span class="keyword">of</span> nearbyFoods) {
+  <span class="keyword">const</span> dist = creature.distanceTo(food);
+  <span class="keyword">if</span> (dist &lt; mouthRadius) {
+    <span class="keyword">this</span>.consumeFood(food);
+    creature.foodCounter++;
+  }
+}
+
+<span class="comment">// Reproduction threshold</span>
+<span class="keyword">if</span> (creature.foodCounter &gt;= repThreshold && now - creature.lastReproduce &gt; cooldown) {
+  <span class="keyword">for</span> (<span class="keyword">let</span> i = <span class="number">0</span>; i &lt; <span class="number">12</span>; i++) {
+    <span class="keyword">this</span>.spawnOffspring(creature);
+  }
+  creature.foodCounter = <span class="number">0</span>;
+  creature.lastReproduce = now;
+}
+</code></pre>
+
+  <div class="comparison">
+    <div>
+      <h4>Fish (Threshold: 4)</h4>
+      <p>Eat food particles. Need 4 meals to reproduce. 10s cooldown. Mouth radius 0.15 units.</p>
+    </div>
+    <div>
+      <h4>Dolphins (Threshold: 5)</h4>
+      <p>Hunt fish as prey. Need 5 fish meals to reproduce. 10s cooldown. Mouth radius 0.5 units.</p>
+    </div>
+  </div>
+
+  <div class="comparison">
+    <div>
+      <h4>Manatees (Threshold: 7)</h4>
+      <p>Eat plants directly. Need 7 meals to reproduce. 10s cooldown. Mouth radius 0.5 units.</p>
+    </div>
+    <div>
+      <h4>Offspring Limit</h4>
+      <p>Max 12 offspring per reproduction event across all species. Prevents population explosions.</p>
+    </div>
+  </div>
+
+  <!-- ────────── Section: Energy & Metabolism ────────── -->
+  <h2 id="energy-metabolism">Energy &amp; Metabolism</h2>
+
+  <p>Every creature starts with <strong>60 energy points</strong>. Each second, energy drains at a constant rate (60 energy/min for fish, scaled for other species). When energy hits zero, the creature dies and sinks to the seafloor, becoming waste that seeds new plants.</p>
+
+  <p>Energy conservation is strict. Creatures don't gain energy from food, only reproduction. The energy drain is <strong>lifespan control</strong>. A fish with 60 starting energy that drains at 60/min lives exactly 60 seconds (plus or minus a random variance of ±30 seconds). Larger creatures like dolphins and manatees drain slower, living 120+ seconds.</p>
+
+  <pre><code><span class="comment">// Energy drain per frame (delta = 1/60 second)</span>
+<span class="keyword">const</span> drainRate = <span class="number">60</span> / <span class="number">60000</span>; <span class="comment">// 60 energy per minute</span>
+creature.energy -= drainRate * deltaTime;
+
+<span class="comment">// Death when energy &lt;= 0</span>
+<span class="keyword">if</span> (creature.energy &lt;= <span class="number">0</span>) {
+  <span class="keyword">this</span>.killCreature(creature);
+  <span class="comment">// Waste seeds plants at creature position</span>
+  <span class="keyword">this</span>.spawnPlant(creature.x, creature.z);
+}
+</code></pre>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">60</div>
+      <div class="stat-label">Starting energy</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">60–90s</div>
+      <div class="stat-label">Fish lifespan</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">120+s</div>
+      <div class="stat-label">Dolphin/manatee</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">0</div>
+      <div class="stat-label">Gain from food</div>
+    </div>
+  </div>
+
+  <!-- ────────── Section: Plant Lifecycle ────────── -->
+  <h2 id="plant-lifecycle">Plant Lifecycle</h2>
+
+  <p>Plants are both scenery and the ecosystem's energy source. They spawn from creature waste, germinate with a <strong>40% base chance</strong> reduced by nearby plant density, grow over 16 seconds with an animation, produce food particles, and die after 37-62 seconds.</p>
+
+  <p><strong>Seed germination</strong> uses a random roll: 40% base chance, but <strong>reduced by 25% for each nearby plant within a 1.33-unit radius</strong>. This creates natural clustering  -  dense forests self-regulate their growth. A spot with 3 neighboring plants has only a ~17% chance of germinating a new one.</p>
+
+  <p><strong>Growth animation:</strong> Young plants (0–16s) display a scaling animation from 0 to 100%, plus a gentle sway. This gives the player visual feedback that the ecosystem is alive and growing.</p>
+
+  <p><strong>Food production:</strong> Young plants (still growing) produce 1 food particle per second. Mature plants (past growth phase) produce 1 every 8 seconds, scaling back production to conserve particles. Each plant can hold at most 4 bites of food before it needs to be consumed.</p>
+
+  <pre><code><span class="comment">// Seed germination with density check</span>
+<span class="keyword">let</span> chance = <span class="number">0.4</span>; <span class="comment">// 40% base</span>
+<span class="keyword">const</span> nearbyPlants = <span class="keyword">this</span>.countPlantsNearby(x, z, <span class="number">1.33</span>);
+chance *= Math.pow(<span class="number">0.75</span>, nearbyPlants); <span class="comment">// 25% reduction per neighbor</span>
+
+<span class="keyword">if</span> (Math.random() &lt; chance) {
+  <span class="keyword">this</span>.spawnPlant(x, z);
+}
+
+<span class="comment">// Food production scaled by growth phase</span>
+<span class="keyword">const</span> isYoung = plant.age &lt; <span class="number">16</span>;
+<span class="keyword">const</span> foodRate = isYoung ? <span class="number">1</span> : <span class="number">1</span> / <span class="number">8</span>;
+
+<span class="keyword">if</span> (plant.foodCounter &gt;= foodRate * deltaTime) {
+  <span class="keyword">this</span>.spawnFood(plant.x, plant.z);
+  plant.foodCounter = <span class="number">0</span>;
+}
+</code></pre>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">40%</div>
+      <div class="stat-label">Germination chance</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">16s</div>
+      <div class="stat-label">Growth duration</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">37–62s</div>
+      <div class="stat-label">Plant lifespan</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">1 or 1/8</div>
+      <div class="stat-label">Food/sec (young/mature)</div>
+    </div>
+  </div>
+
+  <!-- ────────── Section: Population Balance ────────── -->
+  <h2 id="population-balance">Population Balance</h2>
+
+  <p>The ecosystem starts with initial object pools for each species - 60 fish, 15 dolphins, and 10 manatees - to seed the world with life. But there are no hard caps. Populations can and do run away beyond those initial numbers. The system is intentionally designed this way.</p>
+
+  <p>Instead of artificial limits, the ecosystem relies on physics and hunger to self-regulate. When food runs out, creatures starve. When predators become too numerous, prey populations decline. Energy drain from movement and maintenance creates constant pressure. These organic forces - not a population monitor - naturally control population growth. During development, populations regularly blew past the initial object pools, exploding until the ecosystem collapsed under its own weight and then recovered.</p>
+
+  <p>This design creates more authentic emergent behavior. Rather than hitting an invisible ceiling, populations rise and fall based on real ecological pressures. It is messier, less stable, and far more interesting.</p>
+
+  <h3>Predator-Prey Dynamics</h3>
+
+  <p>The ecosystem's core tension is the predator-prey loop. Fish breed slowly but exist in numbers. Dolphins hunt effectively but must breathe and can fail. Manatees ignore the whole drama. This creates a balanced system where neither predators nor prey can fully dominate.</p>
+
+  <h4>Fish Behavior</h4>
+  <p>Fish forage peacefully until a dolphin enters a 1.5-unit radius. At that instant, all nearby fish (within the radius) reverse course and swim away at full speed. If the dolphin stays near, fish keep fleeing. If the dolphin moves away or surfaces, fish calm down and return to foraging within 1-2 seconds. This creates dramatic chases where prey dodge obstacles and the dolphin must predict their path rather than just chase linearly.</p>
+
+  <h4>Dolphin Strategy</h4>
+  <p>Dolphins don't randomly hunt. They use a simple search pattern: move forward, raycasting a cone ahead for fish. When they detect prey, they lock onto the nearest target and accelerate. If the dolphin gets close enough (0.5 units), it kills and consumes the fish, restoring hunger points. If a chase lasts too long (say, 10 seconds) without contact, the dolphin gives up and returns to searching.</p>
+
+  <h4>Kill Mechanics</h4>
+  <p>When a dolphin reaches within 0.5 units of a fish, the fish is instantly removed and a death particle effect plays at that position. The dolphin gains food points. The natural pace of hunting is limited by the dolphins' need to surface for air every 60 seconds, which interrupts chases and gives fish time to scatter. This prevents single predators from annihilating the entire fish population in seconds.</p>
+
+  <h4>Population Equilibrium</h4>
+  <p>There are no spawners or timers - every creature in PolyFish exists because another creature reproduced. Fish eat food particles and reproduce after reaching a food threshold. Dolphins hunt fish and reproduce the same way. Manatees are the farmers of the ocean floor, tending to the kelp fields by grazing on plants and seeding new growth through their waste. The result is a system where populations oscillate naturally: too many fish depletes the food supply, slowing reproduction and letting dolphins catch up. Too few fish means dolphins starve and die off, giving the fish room to bounce back.</p>
+
+  <div class="comparison">
+    <div>
+      <h4>Fish Evasion</h4>
+      <p>React to predators at 1.5 unit radius, reverse instantly, scatter in random directions. AI updates every frame for responsive dodge. Can hide in kelp or terrain obstacles.</p>
+    </div>
+    <div>
+      <h4>Dolphin Predation</h4>
+      <p>Sprint at 3.5x speed through prey schooling, kill at 0.5 unit contact range. Hunt duration capped at 10s per attempt. Hunger cooldown prevents population collapse.</p>
+    </div>
+  </div>
+
+  <p>The predator-prey system isn't perfect - fish don't have complex evasion AI like real schooling behavior. But the simplicity works: the game feels alive because creatures constantly interact, sometimes the player is witnessing a hunt, and sometimes they're watching a lucky fish escape. That dynamic interplay is what makes the ecosystem feel real.</p>
+
+  <!-- ── Demo 2: Predator-Prey Simulator ── -->
+  <div class="demo-container"></div>
+
+  <p>The predator-prey simulator demonstrates food chain dynamics in action. Fish (small amber dots) actively seek and consume food particles (green circles). When a dolphin (blue dot) approaches, fish detect the threat and flee. Both species use energy over time and must feed to reproduce. Dead creatures seed new food. The population chart at the bottom tracks fish and dolphin populations in real time, showing predator-prey cycles as they emerge naturally from individual behaviors.</p>
+
+  <!-- ── Page Navigation ── -->
+  <div class="page-nav">
+    <a href="creatures.html">
+      <span class="nav-dir">&larr; Previous</span>
+      <span class="nav-title">Creatures &amp; AI</span>
+    </a>
+    <a href="kelp.html">
+      <span class="nav-dir">Next &rarr;</span>
+      <span class="nav-title">Kelp &amp; Verlet Physics</span>
+    </a>
+  </div>
+
+</article>
+
+<footer>
+  <a href="/" class="footer-play">Play PolyFish</a><br>
+  &copy; 2026 The Department of Silly Stuff, LLC
+</footer>
+
+<script type="module">
+import { init } from './demos/ecosystem-sim.js';
+
+document.addEventListener('DOMContentLoaded', () => {
+  const container = document.querySelector('.demo-container');
+  if (container) {
+    init(container);
+  }
+});
+</script>
+
+</body>
+</html>

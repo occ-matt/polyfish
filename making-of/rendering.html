@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rendering & Shaders  -  Making of PolyFish</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">Making of <span>PolyFish</span></a>
+    <a href="/" class="nav-play-mobile">&#9654; Play PolyFish</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+    </button>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="origins.html">Origins</a>
+      <a href="ai.html">AI Collab</a>
+      <a href="creatures.html">Creatures</a>
+      <a href="ecosystem.html">Ecosystem</a>
+      <a href="kelp.html">Kelp</a>
+      <a href="rendering.html" class="active">Rendering</a>
+      <a href="camera.html">Camera</a>
+      <a href="audio.html">Audio</a>
+      <a href="performance.html">Performance</a>
+      <a href="demos.html">Demos</a>
+      <a href="/" class="nav-play">Play PolyFish</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-header">
+  <div class="breadcrumb">Chapter 05</div>
+  <h1 class="page-title">Rendering &amp; Shaders</h1>
+  <p class="page-subtitle">GPU-driven visual effects through shader injection, instanced rendering, and procedural techniques that create PolyFish's signature underwater atmosphere.</p>
+</header>
+
+<article>
+
+  <div class="toc">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#shader-injection">Shader Injection via onBeforeCompile</a></li>
+      <li><a href="#caustics">Caustic Shader &amp; Water Refraction</a></li>
+      <li><a href="#godrays">Volumetric God Rays</a></li>
+      <li><a href="#water-surface">Water Surface Animation</a></li>
+      <li><a href="#instancing">Instanced Rendering Performance</a></li>
+      <li><a href="#marine-snow">Marine Snow Particles</a></li>
+      <li><a href="#ibl-materials">IBL &amp; Material Caching</a></li>
+    </ol>
+  </div>
+
+  <!-- ────────── Section: Shader Injection ────────── -->
+  <h2 id="shader-injection">Shader Injection via onBeforeCompile</h2>
+
+  <p>Light has a language underwater. Caustic patterns flicker across the seafloor. The water surface ripples. Particles drift. We built this visual language using <strong>shader injection</strong> - a technique that layers effects onto Three.js's standard materials without rebuilding the renderer. This approach reuses the entire PBR pipeline (lighting, shadows, reflections) and only modifies the specific parts needed for water effects.</p>
+
+  <p>The system works in three stages: <strong>vertex shader</strong> modifications inject wave animation and caustic UVs, <strong>fragment shader</strong> modifications add caustic patterns and depth fading, and <strong>uniforms</strong> are passed dynamically each frame (time, camera position, etc.). The material is applied once at load time; thereafter only uniforms change, not the shader code itself.</p>
+
+  <div class="callout technical">
+    <p><strong>Why onBeforeCompile?</strong> It avoids the cost of writing custom shader from scratch. Three.js's MeshStandardMaterial already handles normal mapping, roughness, metalness, IBL, and shadow mapping. By injecting code fragments at compile time, we layer effects on top without reimplementing the lighting model.</p>
+  </div>
+
+  <pre><code><span class="keyword">material</span>.<span class="function">onBeforeCompile</span> = <span class="keyword">function</span> (shader) {
+  <span class="comment">// Inject custom uniforms</span>
+  shader.uniforms.uTime = { <span class="string">value</span>: <span class="number">0.0</span> };
+  shader.uniforms.uCausticScale = { <span class="string">value</span>: <span class="number">1.5</span> };
+  shader.uniforms.uCausticIntensity = { <span class="string">value</span>: <span class="number">0.09</span> };
+  shader.uniforms.uCameraPos = { <span class="string">value</span>: <span class="keyword">new</span> Vector3() };
+
+  <span class="comment">// Inject vertex shader code before common includes</span>
+  shader.vertexShader = shader.vertexShader.replace(
+    <span class="string">'#include &lt;common&gt;'</span>,
+    <span class="string">'#include &lt;common&gt;\n'</span> + vertexInjection
+  );
+
+  <span class="comment">// Inject fragment shader after normal map decoding</span>
+  shader.fragmentShader = shader.fragmentShader.replace(
+    <span class="string">'#include &lt;normal_fragment_maps&gt;'</span>,
+    <span class="string">'#include &lt;normal_fragment_maps&gt;\n'</span> + fragmentInjection
+  );
+};</code></pre>
+
+  <p>This architecture makes it trivial to adjust effects in real time. Changing caustic intensity is just an assignment to <code>material.uniforms.uCausticIntensity.value</code>. Toggling effects on or off is a single boolean flag. The game even supports per-instance effect variation through instance attributes.</p>
+
+  <!-- ────────── Section: Caustics ────────── -->
+  <h2 id="caustics">Caustic Shader &amp; Water Refraction</h2>
+
+  <p>Caustics are the dancing light patterns you see on the seafloor when looking up at the surface. In PolyFish, they're generated using <strong>dual-octave Voronoi domain warping</strong>  -  a procedural technique that mimics the refraction of light through an uneven water surface.</p>
+
+  <p>The algorithm works in two passes. <strong>First pass</strong> computes a Voronoi pattern at one scale and uses it to warp the coordinates for a second Voronoi lookup. This creates organic, interconnected cell shapes rather than a rigid grid. <strong>Second pass</strong> refines the pattern at half the scale, blending the two together for visual richness. The result scrolls smoothly over time.</p>
+
+  <p>Distance from surface matters enormously. Caustics are <strong>full intensity (1.0) at the seafloor</strong>, but fade linearly over 30 units of depth. This prevents the effect from overwhelming the image and keeps distant scenes readable. Additionally, caustics fade as they approach the camera  -  beyond 25 units, they're invisible. This prevents distracting shimmer on objects you're interacting with.</p>
+
+  <p>The base intensity is deliberately subtle: <strong>0.09</strong> (9% of maximum brightness). This feels natural  -  real caustics are ambient, not spotlight-like. The pattern scrolls at a speed tied to engine time, creating the illusion of flowing water overhead.</p>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">2</div>
+      <div class="stat-label">Voronoi octaves</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">30</div>
+      <div class="stat-label">Depth fade distance</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">25</div>
+      <div class="stat-label">Camera fade distance</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">0.09</div>
+      <div class="stat-label">Base intensity</div>
+    </div>
+  </div>
+
+  <p>The caustic shader includes a simple LOD system. At <strong>LOD 0</strong> (close objects), the full dual-octave pattern is computed. At <strong>LOD 1</strong> (distant objects), only the coarse first-octave Voronoi is evaluated, cutting shader complexity by half. The transition is invisible because both LODs fade with distance anyway.</p>
+
+  <p>A crucial visual achievement was applying caustics not just to the seafloor, but directly onto the creatures themselves. The underwater light patterns flow across fish and dolphin bodies, making them feel embedded in the lit water column rather than simply passing through it. This breakthrough transformed the scene from "characters swimming over terrain" to "characters swimming through light itself".</p>
+
+  <!-- ── Demo 1: Caustic Pattern Generator ── -->
+  <div class="demo-container" id="demo-caustics-container"></div>
+
+  <pre><code><span class="comment">// Fragment shader caustic injection  -  Voronoi domain warping</span>
+<span class="keyword">float</span> <span class="function">caustic</span>(<span class="keyword">vec2</span> p) {
+  <span class="comment">// First Voronoi octave  -  used to warp coordinates</span>
+  <span class="keyword">vec2</span> wrapped = <span class="function">mod</span>(p, <span class="number">1.0</span>);
+  <span class="keyword">float</span> dist = <span class="number">1.0</span>;
+  <span class="keyword">for</span> (<span class="keyword">int</span> y = -<span class="number">1</span>; y &lt;= <span class="number">1</span>; y++) {
+    <span class="keyword">for</span> (<span class="keyword">int</span> x = -<span class="number">1</span>; x &lt;= <span class="number">1</span>; x++) {
+      <span class="keyword">vec2</span> cell = <span class="function">vec2</span>(x, y);
+      <span class="keyword">vec2</span> seed = <span class="function">mod</span>(cell * <span class="number">123.456</span>, <span class="number">1.0</span>);
+      seed = <span class="function">fract</span>(seed * <span class="function">sin</span>(seed * <span class="number">45.164</span>));
+      dist = <span class="function">min</span>(dist, <span class="function">distance</span>(wrapped, <span class="function">fract</span>(seed)));
+    }
+  }
+
+  <span class="comment">// Second octave at half scale  -  warped by first octave</span>
+  <span class="keyword">vec2</span> warped = p * <span class="number">0.5</span> + <span class="function">vec2</span>(<span class="function">sin</span>(p.y), <span class="function">cos</span>(p.x)) * dist;
+  <span class="keyword">float</span> fine = <span class="function">caustic</span>(warped);
+
+  <span class="comment">// Blend octaves and add time animation</span>
+  <span class="keyword">return</span> <span class="function">mix</span>(dist, fine, <span class="number">0.5</span>);
+}</code></pre>
+
+  <div class="comparison">
+    <div>
+      <h4>Single-Octave Voronoi</h4>
+      <p>Pure cellular pattern. Regular, geometric, underwater-y but visually repetitive. Lacks depth and organic variation.</p>
+    </div>
+    <div>
+      <h4>Dual-Octave Domain Warping</h4>
+      <p>Coarse octave warps the fine octave's coordinates, creating interconnected cells. Feels like light refracting through actual rippling water.</p>
+    </div>
+  </div>
+
+  <!-- ────────── Section: God Rays ────────── -->
+  <h2 id="godrays">Volumetric God Rays</h2>
+
+  <p>Caustics handle the light patterns on the seafloor, but the water column itself needed visible shafts of light  -  thick beams cutting through the water from the surface above. These "god rays" are one of those effects that immediately sell the underwater atmosphere. Getting them right took several iterations.</p>
+
+  <h3>The Wrong Turns</h3>
+
+  <p>The first attempt injected god ray calculations directly into <code>CausticShader.js</code> via <code>onBeforeCompile</code>  -  the same system used for floor caustics. Each material got its own god ray contribution baked into the fragment shader. This was architecturally clean but produced thin, web-like patterns that looked like caustic intersections rather than thick beams of light. The Voronoi F2-F1 distance (which highlights cell <em>edges</em>) was the wrong choice; it created a lacy mesh where we wanted broad columns.</p>
+
+  <p>The second attempt routed the entire scene through an intermediate render target so god rays could be composited in a post-process pass. This worked technically, but Three.js's color management pipeline (sRGB output space, HalfFloat buffers) meant the scene colors came out darker after the round trip  -  as if looking through sunglasses. Multiple attempts to fix the color space conversion only traded one artifact for another.</p>
+
+  <h3>The Solution: Additive Overlay</h3>
+
+  <p>The breakthrough was realizing that scene colors should never pass through any intermediate buffer at all. The final architecture uses a <strong>two-phase approach</strong>: a depth-only pre-pass captures the scene's depth buffer (discarding color entirely), then the scene renders normally to the screen, and finally a fullscreen quad renders <em>only</em> the god ray light contribution with <code>THREE.AdditiveBlending</code>. Scene colors are never touched  -  the god rays are purely additive light on top.</p>
+
+  <h3>Screen-Space Raymarching</h3>
+
+  <p>Each pixel fires a ray from the camera through the scene. Using the depth buffer, the shader knows how far to march before hitting geometry. It takes <strong>16 steps</strong> along the ray, sampling a beam pattern at each point. Each sample accumulates light based on its depth below the water surface, with an exponential fade that makes beams brightest near the surface.</p>
+
+  <p>The beam pattern uses <strong>inverted Voronoi F1</strong>  -  the opposite of the caustic approach. Where caustics use F2-F1 to highlight cell edges (thin bright lines), god rays use inverted F1 to highlight cell centers (broad bright regions). The result is thick, soft columns of light rather than a spiderweb pattern.</p>
+
+  <pre><code><span class="comment">// Voronoi F1 inverted: cell CENTERS are bright = thick beams</span>
+<span class="keyword">float</span> minDist = <span class="number">1.0</span>;
+<span class="keyword">for</span> (<span class="keyword">int</span> y = -<span class="number">1</span>; y &lt;= <span class="number">1</span>; y++) {
+  <span class="keyword">for</span> (<span class="keyword">int</span> x = -<span class="number">1</span>; x &lt;= <span class="number">1</span>; x++) {
+    <span class="keyword">vec2</span> cellId = id + <span class="function">vec2</span>(x, y);
+    <span class="keyword">vec2</span> offset = <span class="function">hash</span>(cellId);
+    offset = <span class="number">0.5</span> + <span class="number">0.45</span> * <span class="function">sin</span>(<span class="number">6.2831</span> * offset);
+    minDist = <span class="function">min</span>(minDist, <span class="function">length</span>(diff));
+  }
+}
+<span class="keyword">float</span> beam = <span class="number">1.0</span> - <span class="function">smoothstep</span>(<span class="number">0.0</span>, <span class="number">0.9</span>, minDist);
+beam *= beam; <span class="comment">// quadratic falloff for guaranteed soft edges</span></code></pre>
+
+  <h3>Making Beams Feel Natural</h3>
+
+  <p>Naive Voronoi cells sit on a regular grid, which reads as "spotlights arranged in a circle." Two octaves of <strong>domain warping</strong> at different frequencies break this regularity, making beam placement feel random and organic. The cell centers themselves are static (no time dependency), so beam roots stay anchored at the surface while the domain warp provides slow drift.</p>
+
+  <p>Uniform beams look artificial. Several layers of variation fix this:</p>
+
+  <div class="comparison">
+    <div>
+      <h4>Per-Beam Depth Staggering</h4>
+      <p>Each Voronoi cell gets a hashed depth reach value, cube-biased so most beams stop near the surface and only rare ones extend to the floor. This prevents the "wall of light" look.</p>
+    </div>
+    <div>
+      <h4>Internal Breakup</h4>
+      <p>A secondary value noise layer creates bright and dark patches within each beam, so they're not solid columns of uniform light. The breakup is sampled in the same tilted coordinate space as the beams so patches align naturally.</p>
+    </div>
+  </div>
+
+  <p>The beams tilt at a fixed angle  -  roughly a 4pm sun direction  -  rather than pointing straight down. This was achieved by shifting the XZ lookup coordinates based on depth: deeper samples offset further in the tilt direction. A very slow wobble (period of ~200 seconds) keeps the direction from feeling completely locked.</p>
+
+  <h3>Solving the Ring Artifacts</h3>
+
+  <p>Looking straight up at the beams initially produced ugly concentric ring artifacts. When the camera looks along the beam axis, consecutive raymarch steps sample nearly identical XZ positions, and the 16 discrete steps create visible banding. Two techniques solve this: a <strong>view-angle fade</strong> that smoothly reduces beam intensity when looking along the beam axis (since beams are most visible from the side anyway), and <strong>per-pixel interleaved gradient noise dithering</strong> that offsets each pixel's ray start by a random fraction of one step, breaking up coherent banding patterns.</p>
+
+  <p>Where beams overlap, additive blending can create harsh brightness spikes. An <strong>exponential soft-clamp</strong> (<code>1.0 - exp(-accum * 1.8)</code>) compresses the high end so overlapping beams blend smoothly rather than creating hard edges.</p>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">16</div>
+      <div class="stat-label">Raymarch steps</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">2</div>
+      <div class="stat-label">Domain warp octaves</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">F1</div>
+      <div class="stat-label">Voronoi mode (inverted)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">0</div>
+      <div class="stat-label">Extra render targets for color</div>
+    </div>
+  </div>
+
+  <!-- ── Demo: God Ray Visualizer ── -->
+  <div class="demo-container" id="demo-godrays-container"></div>
+
+  <!-- ────────── Section: Water Surface ────────── -->
+  <h2 id="water-surface">Water Surface Animation</h2>
+
+  <p>The water surface itself (the "sea ceiling" mesh far above the camera) uses a <strong>vertex shader animation</strong> that runs entirely on the GPU. Three overlapping sine waves at different angles and speeds create the illusion of wind-driven waves. The waves are tightly clustered near the surface (high frequency) and invisible to distant cameras.</p>
+
+  <p>The wave formula combines <strong>macro swells</strong> (large, slow waves) with <strong>micro chop</strong> (small, fast ripples at 18% of the macro amplitude). This two-tier system is common in ocean simulation  -  large swells are caused by distant weather, while small chop responds to local wind. Both are purely procedural; no texture lookup or geometry deformation is needed beyond the sine calculation.</p>
+
+  <p>The animation is driven by vertex position XZ coordinates and engine time, so movement is smooth and continuous regardless of player motion. Every vertex is computed independently, making it trivially parallelizable  -  the GPU evaluates 10,000+ vertices per frame with zero CPU overhead.</p>
+
+  <pre><code><span class="comment">// Vertex shader  -  GPU-driven water surface animation</span>
+<span class="keyword">float</span> <span class="function">wave</span>(<span class="keyword">vec3</span> p, <span class="keyword">float</span> speed, <span class="keyword">float</span> scale, <span class="keyword">float</span> phase) {
+  <span class="keyword">return</span> <span class="function">sin</span>((<span class="keyword">p</span>.x + <span class="keyword">p</span>.z) / scale + uTime * speed + phase) * 0.5;
+}
+
+<span class="comment">// Macro swell (slow, large amplitude)</span>
+<span class="keyword">float</span> macro = <span class="function">wave</span>(<span class="keyword">p</span>, <span class="number">0.3</span>, <span class="number">20.0</span>, <span class="number">0.0</span>)
+            + <span class="function">wave</span>(<span class="keyword">p</span>, <span class="number">0.25</span>, <span class="number">18.0</span>, <span class="number">1.5</span>)
+            + <span class="function">wave</span>(<span class="keyword">p</span>, <span class="number">0.35</span>, <span class="number">22.0</span>, <span class="number">-1.0</span>);
+
+<span class="comment">// Micro chop (fast, small amplitude = 18% of macro)</span>
+<span class="keyword">float</span> micro = (<span class="function">wave</span>(<span class="keyword">p</span>, <span class="number">2.0</span>, <span class="number">2.5</span>, <span class="number">0.2</span>)
+             + <span class="function">wave</span>(<span class="keyword">p</span>, <span class="number">1.8</span>, <span class="number">3.0</span>, <span class="number">-0.5</span>)) * <span class="number">0.18</span>;
+
+<span class="comment">// Final displacement</span>
+<span class="keyword">float</span> displacement = (macro + micro) * uWaveAmplitude;
+vPosition.y += displacement;</code></pre>
+
+  <!-- ── Demo: Water Surface Visualizer ── -->
+  <div class="demo-container" id="demo-watersurface-container"></div>
+
+  <!-- ────────── Section: Instancing ────────── -->
+  <h2 id="instancing">Instanced Rendering Performance</h2>
+
+  <p>With 60 fish, 15 dolphins, and 10 manatees on screen, drawing each creature as a separate mesh would mean 85 draw calls. Instead, PolyFish uses <strong>InstancedMesh</strong> to pack identical creatures into single draw calls. Fish share one InstancedMesh (60 instances, 1 draw call), dolphins share another (15 instances, 1 draw call), and manatees a third (10 instances, 1 draw call). Total: 3 draw calls for all creatures.</p>
+
+  <p>Each creature instance has two custom attributes: <strong>aSwimPhase</strong> (phase offset in the swim cycle) and <strong>aSwimAmplitude</strong> (how far the creature oscillates). These are packed into vertex attribute arrays. The vertex shader reads them and modulates the swim animation per-instance. Dead creatures are marked by setting their amplitude to 0, making them rigid and still.</p>
+
+  <p>The transformation matrices (position, rotation, scale) are stored directly in the InstancedMesh's <code>instanceMatrix</code> buffer. Every frame, creature positions are updated by writing new transforms into this buffer and setting the WebGL dirty flag. The GPU then fetches the appropriate matrix for each vertex based on <code>gl_InstanceID</code>, completely eliminating transform overhead.</p>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">85</div>
+      <div class="stat-label">Without instancing</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">3</div>
+      <div class="stat-label">With instancing</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">97%</div>
+      <div class="stat-label">Draw call reduction</div>
+    </div>
+  </div>
+
+  <p class="callout">See the <a href="performance.html#instancing">interactive instancing comparison</a> on the Performance page.</p>
+
+  <pre><code><span class="comment">// Initialize 60-instance mesh for fish</span>
+<span class="keyword">const</span> fishInstancedMesh = <span class="keyword">new</span> InstancedMesh(
+  fishGeometry,
+  fishMaterial,
+  <span class="number">60</span> <span class="comment">// 60 instances, 1 draw call</span>
+);
+
+<span class="comment">// Set up custom vertex attributes</span>
+<span class="keyword">const</span> aSwimPhase = <span class="keyword">new</span> BufferAttribute(
+  <span class="keyword">new</span> Float32Array(<span class="number">60</span>),
+  <span class="number">1</span>
+);
+<span class="keyword">const</span> aSwimAmplitude = <span class="keyword">new</span> BufferAttribute(
+  <span class="keyword">new</span> Float32Array(<span class="number">60</span>),
+  <span class="number">1</span>
+);
+fishInstancedMesh.geometry.setAttribute(<span class="string">'aSwimPhase'</span>, aSwimPhase);
+fishInstancedMesh.geometry.setAttribute(<span class="string">'aSwimAmplitude'</span>, aSwimAmplitude);
+
+<span class="comment">// Every frame: update instance transforms and attribute data</span>
+<span class="keyword">for</span> (<span class="keyword">let</span> i = <span class="number">0</span>; i &lt; fishCount; i++) {
+  fishInstancedMesh.setMatrixAt(i, fishCreatures[i].matrix);
+  aSwimPhase.array[i] = fishCreatures[i].swimPhase;
+  aSwimAmplitude.array[i] = fishCreatures[i].alive ? <span class="number">1.0</span> : <span class="number">0.0</span>;
+}
+aSwimPhase.needsUpdate = <span class="keyword">true</span>;
+aSwimAmplitude.needsUpdate = <span class="keyword">true</span>;
+fishInstancedMesh.instanceMatrix.needsUpdate = <span class="keyword">true</span>;</code></pre>
+
+  <p>A crucial optimization: the game only updates transforms for creatures that moved or rotated. Static creatures skip the buffer write entirely. This reduces bandwidth to the GPU by ~40% on average scenes. Combined with the 97% reduction in draw calls, instancing is the single biggest win in the rendering pipeline.</p>
+
+  <!-- ────────── Section: Marine Snow ────────── -->
+  <h2 id="marine-snow">Marine Snow Particles</h2>
+
+  <p>Marine snow  -  the drift of organic particles constantly falling through the water  -  is rendered using <strong>500 particles on desktop</strong> (150 on mobile). Each particle is a small triangle sprite (64×64 pixels) that rotates slowly. Particles drift downward at 0.3–0.6 units per second with gentle lateral sway, creating the impression of passive settling.</p>
+
+  <p>Instead of using a standard PointsMaterial, the system employs a custom shader that supports <strong>per-particle rotation</strong>. Each particle stores a rotation angle in a vertex attribute. The fragment shader renders a pre-made grayscale triangle texture, rotated by that angle. This avoids the harsh circular look of traditional point sprites and feels more organic.</p>
+
+  <p>Particles that fall below the camera trigger a soft reset  -  they're repositioned above the view with a randomized lateral offset. This creates an infinite, seamless fall without pool exhaustion. The particle system is CPU-driven (position updates in JavaScript) because the motion is pseudo-random and data-driven. However, the rotation and rendering is pure GPU.</p>
+
+  <pre><code><span class="comment">// Marine snow particle system initialization</span>
+<span class="keyword">const</span> particleCount = <span class="number">500</span>; <span class="comment">// 150 on mobile</span>
+<span class="keyword">const</span> positions = <span class="keyword">new</span> Float32Array(particleCount * <span class="number">3</span>);
+<span class="keyword">const</span> rotations = <span class="keyword">new</span> Float32Array(particleCount);
+<span class="keyword">const</span> velocities = <span class="keyword">new</span> Float32Array(particleCount * <span class="number">3</span>);
+
+<span class="comment">// Initialize particles with random spread</span>
+<span class="keyword">for</span> (<span class="keyword">let</span> i = <span class="number">0</span>; i &lt; particleCount; i++) {
+  positions[i*<span class="number">3</span>] = (Math.random() - <span class="number">0.5</span>) * <span class="number">100</span>; <span class="comment">// X spread</span>
+  positions[i*<span class="number">3</span>+<span class="number">1</span>] = Math.random() * <span class="number">100</span>; <span class="comment">// Y (depth)</span>
+  positions[i*<span class="number">3</span>+<span class="number">2</span>] = (Math.random() - <span class="number">0.5</span>) * <span class="number">100</span>; <span class="comment">// Z spread</span>
+
+  rotations[i] = Math.random() * Math.PI * <span class="number">2</span>;
+  velocities[i*<span class="number">3</span>+<span class="number">1</span>] = -(<span class="number">0.3</span> + Math.random() * <span class="number">0.3</span>); <span class="comment">// Downward</span>
+}
+
+<span class="comment">// Each frame: update positions and rotations</span>
+<span class="keyword">for</span> (<span class="keyword">let</span> i = <span class="number">0</span>; i &lt; particleCount; i++) {
+  <span class="comment">// Apply velocity</span>
+  positions[i*<span class="number">3</span>] += velocities[i*<span class="number">3</span>] * dt;
+  positions[i*<span class="number">3</span>+<span class="number">1</span>] += velocities[i*<span class="number">3</span>+<span class="number">1</span>] * dt;
+  positions[i*<span class="number">3</span>+<span class="number">2</span>] += velocities[i*<span class="number">3</span>+<span class="number">2</span>] * dt;
+
+  <span class="comment">// Lateral sway</span>
+  velocities[i*<span class="number">3</span>] += <span class="function">Math.sin</span>(time + i) * <span class="number">0.02</span>;
+  velocities[i*<span class="number">3</span>+<span class="number">2</span>] += <span class="function">Math.cos</span>(time * <span class="number">0.5</span> + i) * <span class="number">0.02</span>;
+
+  <span class="comment">// Increment rotation</span>
+  rotations[i] += <span class="number">0.02</span>;
+
+  <span class="comment">// Reset if below camera</span>
+  <span class="keyword">if</span> (positions[i*<span class="number">3</span>+<span class="number">1</span>] &lt; cameraPos.y - <span class="number">50</span>) {
+    positions[i*<span class="number">3</span>+<span class="number">1</span>] = cameraPos.y + <span class="number">50</span>;
+  }
+}
+positionAttribute.needsUpdate = <span class="keyword">true</span>;
+rotationAttribute.needsUpdate = <span class="keyword">true</span>;</code></pre>
+
+  <div class="callout">
+    <p><strong>Why soft particles?</strong> The rotation shader allows particles to fade smoothly at depth edges without needing additive blending or depth testing. This prevents the harsh "popping" of traditional particle systems at screen edges.</p>
+  </div>
+
+  <!-- ────────── Section: IBL & Materials ────────── -->
+  <h2 id="ibl-materials">IBL &amp; Material Caching</h2>
+
+  <p>All creatures are shaded with <strong>vertex-colored MeshStandardMaterial</strong>. Colors are baked directly into the mesh geometry, avoiding texture overhead. This is perfect for a low-poly art style: solid colors for each body part (head, fins, belly) feel intentional rather than unfinished.</p>
+
+  <p>Material parameters are fixed across all creatures: <strong>roughness 0.85</strong> (matte, non-reflective), <strong>metalness 0.05</strong> (barely metallic), and <strong>flatShading enabled</strong> for the crisp faceted look. The combination is critical. Metalness at exactly 0.05 prevents creatures from looking like polished plastic (too shiny) while preserving subtle specular highlights. The roughness at 0.85 ensures soft shadows and diffuse interactions with image-based lighting.</p>
+
+  <p>PolyFish pre-caches all materials in a single lookup table keyed by a hash of the parameters. Since most creatures share identical material properties (a rare game design choice!), the hash typically produces one or two cache hits, avoiding redundant Three.js Material objects. The cache persists across scenes, so loading a new area reuses existing materials instead of allocating new ones.</p>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">0.85</div>
+      <div class="stat-label">Roughness</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">0.05</div>
+      <div class="stat-label">Metalness</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">1</div>
+      <div class="stat-label">Typical cache hits</div>
+    </div>
+  </div>
+
+  <pre><code><span class="comment">// Material cache keyed by parameter hash</span>
+<span class="keyword">const</span> materialCache = <span class="keyword">new</span> Map();
+
+<span class="keyword">function</span> <span class="function">getMaterial</span>(color, roughness, metalness, vertexColors) {
+  <span class="keyword">const</span> key = <span class="function">hashParams</span>(color, roughness, metalness, vertexColors);
+
+  <span class="keyword">if</span> (materialCache.has(key)) {
+    <span class="keyword">return</span> materialCache.get(key);
+  }
+
+  <span class="keyword">const</span> material = <span class="keyword">new</span> MeshStandardMaterial({
+    color: color,
+    roughness: roughness,
+    metalness: metalness,
+    vertexColors: vertexColors,
+    flatShading: <span class="keyword">true</span>
+  });
+
+  <span class="comment">// Inject caustic effects via onBeforeCompile</span>
+  material.onBeforeCompile = setupCausticShader;
+
+  materialCache.set(key, material);
+  <span class="keyword">return</span> material;
+}</code></pre>
+
+  <p>Image-based lighting (IBL) is baked into the scene via <strong>Three.js PMREMGenerator</strong>. The high dynamic range environment map is pre-convolved offline, producing a specular cubemap (roughness-dependent) and an irradiance map (diffuse). This gives creatures rich, contextual shading without any lights in the scene  -  the "sky" itself provides lighting. Underwater, the HDR map shows a blue-tinted sky with caustic patterns, creating the sense of depth.</p>
+
+  <!-- ── Page Navigation ── -->
+  <div class="page-nav">
+    <a href="kelp.html">
+      <span class="nav-dir">&larr; Previous</span>
+      <span class="nav-title">Kelp &amp; Verlet Physics</span>
+    </a>
+    <a href="camera.html">
+      <span class="nav-dir">Next &rarr;</span>
+      <span class="nav-title">Cinematic Camera</span>
+    </a>
+  </div>
+
+</article>
+
+<footer>
+  <a href="/" class="footer-play">Play PolyFish</a><br>
+  &copy; 2026 The Department of Silly Stuff, LLC
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════════
+     DEMO 1: CAUSTIC PATTERN GENERATOR
+     ══════════════════════════════════════════════════════════════ -->
+<script type="module">
+  import { init as initCaustics } from './demos/caustics.js';
+  const container = document.getElementById('demo-caustics-container');
+  if (container) initCaustics(container);
+</script>
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     DEMO 3: GOD RAY VISUALIZER (WebGL fullscreen shader)
+     ══════════════════════════════════════════════════════════════ -->
+<script type="module">
+  import { init as initGodrays } from './demos/godrays.js';
+  const container = document.getElementById('demo-godrays-container');
+  if (container) initGodrays(container);
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════
+     DEMO 4: WATER SURFACE - Actual displaced grid mesh (like the game)
+     ══════════════════════════════════════════════════════════════ -->
+<script type="module">
+  import { init as initWaterSurface } from './demos/water-surface.js';
+  const container = document.getElementById('demo-watersurface-container');
+  if (container) initWaterSurface(container);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>PolyFish</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a1929; touch-action: none; overscroll-behavior: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    canvas { display: block; touch-action: none; }
+    #fade-overlay {
+      position: fixed;
+      inset: 0;
+      background: black;
+      z-index: 100;
+      pointer-events: none;
+      transition: opacity 2s ease-in-out;
+    }
+    #death-message {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 101;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 2s ease-in-out;
+    }
+    #death-message span {
+      color: rgba(255, 255, 255, 0.8);
+      font-family: 'Courier New', monospace;
+      font-size: 28px;
+      letter-spacing: 2px;
+    }
+    /* Credits roll */
+    #credits-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 102;
+      pointer-events: none;
+      opacity: 0;
+      background: black;
+      overflow: hidden;
+      transition: opacity 1.5s ease-in-out;
+    }
+    #credits-scroll {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      top: 100%;
+      text-align: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      color: rgba(255, 255, 255, 0.9);
+      white-space: nowrap;
+      will-change: transform;
+    }
+    #credits-scroll .credits-logo {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 38px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: #e8a840;
+      margin-bottom: 6px;
+      text-shadow: 0 2px 12px rgba(232, 168, 64, 0.3);
+    }
+    #credits-scroll .credits-subtitle {
+      font-size: 15px;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 60px;
+    }
+    #credits-scroll .credits-role {
+      font-size: 13px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.45);
+      margin-top: 36px;
+      margin-bottom: 8px;
+    }
+    #credits-scroll .credits-name {
+      font-size: 22px;
+      font-weight: 300;
+      letter-spacing: 1px;
+      color: rgba(255, 255, 255, 0.85);
+    }
+    #credits-scroll .credits-detail {
+      font-size: 13px;
+      font-weight: 300;
+      letter-spacing: 0.5px;
+      color: rgba(255, 255, 255, 0.4);
+      margin-top: 2px;
+    }
+    #credits-scroll .credits-thanks {
+      margin-top: 60px;
+      font-size: 26px;
+      font-weight: 300;
+      letter-spacing: 2px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+    #credits-scroll .credits-copyright {
+      margin-top: 40px;
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      color: rgba(255, 255, 255, 0.3);
+    }
+    /* During credits: hide every UI element except canvas, credits overlay, and fade overlay */
+    body.credits-active > *:not(canvas):not(#credits-overlay):not(#fade-overlay) {
+      display: none !important;
+    }
+    /* Mode selector */
+    #mode-selector {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 10;
+      background: rgba(10, 25, 47, 0.85);
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(100, 150, 200, 0.3);
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      display: flex;
+      gap: 4px;
+    }
+    #mode-selector button {
+      padding: 4px 10px;
+      background: rgba(30, 50, 80, 0.7);
+      border: 1px solid rgba(100, 150, 200, 0.3);
+      color: rgba(255, 255, 255, 0.55);
+      cursor: pointer;
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 12px;
+      transition: all 0.15s;
+    }
+    #mode-selector button:hover {
+      background: rgba(40, 70, 110, 0.8);
+      color: rgba(255, 255, 255, 0.8);
+    }
+    #mode-selector button.active {
+      background: rgba(50, 100, 160, 0.9);
+      color: #fff;
+      border-color: rgba(120, 180, 255, 0.6);
+    }
+    /* Title screen */
+    #title-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      /* Place button group visually between the 3D logo and the copyright footer */
+      padding-bottom: 12vh;
+      padding-left: 16px;
+      padding-right: 16px;
+      pointer-events: all;
+      transition: opacity 1.2s ease-out;
+    }
+    #title-screen .title-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      align-items: stretch;
+      width: auto;
+    }
+    /* VR button styled to match but visually subordinate */
+    #title-screen .vr-title-btn {
+      opacity: 0.8;
+      text-align: center;
+      /* Override Three.js VRButton inline styles that get re-applied async */
+      width: 100% !important;
+      position: static !important;
+      left: auto !important;
+    }
+    #title-screen .vr-title-btn:hover {
+      opacity: 1;
+    }
+    #title-screen .title-btn {
+      /* Soft tinted glass — light top edge fading to deeper tint for 3D roundedness */
+      background: linear-gradient(180deg, rgba(60, 120, 170, 0.3) 0%, rgba(10, 35, 65, 0.35) 100%);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(150, 210, 255, 0.35);
+      border-top-color: rgba(200, 230, 255, 0.5);
+      color: #fff;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-align: center;
+      padding: 14px 24px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 4px 20px rgba(0, 40, 80, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.3), inset 0 -1px 1px rgba(0, 20, 50, 0.15);
+      position: relative;
+      overflow: hidden;
+      animation: title-glow 3s ease-in-out infinite;
+    }
+    #title-screen .title-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(45deg, transparent 0%, rgba(255, 255, 255, 0.1) 50%, transparent 100%);
+      opacity: 0;
+      transition: opacity 0.6s ease;
+      border-radius: 12px;
+      pointer-events: none;
+    }
+    #title-screen .title-btn:hover {
+      background: linear-gradient(180deg, rgba(70, 140, 190, 0.4) 0%, rgba(15, 45, 80, 0.45) 100%);
+      border-color: rgba(160, 220, 255, 0.55);
+      color: #fff;
+      box-shadow: 0 8px 36px rgba(0, 60, 120, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.35), inset 0 -1px 1px rgba(0, 20, 50, 0.15);
+      transform: translateY(-4px);
+      animation: none;
+    }
+    #title-screen .title-btn:hover::before {
+      opacity: 1;
+    }
+    #title-screen .title-btn:active {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 100, 150, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+    @keyframes title-glow {
+      0%, 100% {
+        box-shadow: 0 4px 20px rgba(0, 40, 80, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.3), inset 0 -1px 1px rgba(0, 20, 50, 0.15);
+      }
+      50% {
+        box-shadow: 0 6px 28px rgba(0, 60, 120, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.35), inset 0 -1px 1px rgba(0, 20, 50, 0.15);
+      }
+    }
+    #title-screen .making-of-btn {
+      text-decoration: none;
+      text-align: center;
+      opacity: 0.8;
+    }
+    #title-screen .making-of-btn:hover {
+      opacity: 1;
+    }
+    #title-screen .copyright {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      color: rgba(255, 255, 255, 0.5);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+      white-space: nowrap;
+    }
+    /* Desktop / tablet landscape */
+    @media (min-width: 768px) {
+      #title-screen {
+        padding-bottom: 12vh;
+      }
+      #title-screen .title-btn {
+        font-size: 15px;
+      }
+    }
+    /* Mobile: touch-friendly */
+    @media (pointer: coarse) {
+      #title-screen .title-btn {
+        font-size: 16px;
+        padding: 16px 40px;
+        min-height: 48px;
+        min-width: 160px;
+      }
+      #title-screen .title-buttons {
+        width: 100%;
+        max-width: 320px;
+      }
+    }
+    /* Small mobile portrait (< 360px wide) */
+    @media (max-width: 359px) {
+      #title-screen {
+        padding-bottom: 8vh;
+      }
+      #title-screen .title-btn {
+        padding: 14px 28px;
+        font-size: 14px;
+        min-width: 140px;
+      }
+      #title-screen .title-buttons {
+        gap: 14px;
+      }
+    }
+    /* Portrait / vertical screens */
+    @media (max-aspect-ratio: 1/1) {
+      #title-screen {
+        padding-bottom: 8vh;
+      }
+      #title-screen .title-buttons {
+        /* already column by default */
+      }
+    }
+    /* Population HUD — upgraded */
+    #hud {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      top: auto;
+      color: rgba(255, 255, 255, 0.85);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+      pointer-events: none;
+      z-index: 9998;
+    }
+    #population-counter {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.05) 100%);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      padding: 9px 22px;
+      border-radius: 24px;
+      border: 1.5px solid rgba(255, 255, 255, 0.18);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12), 0 2px 10px rgba(0, 0, 0, 0.18);
+      transition: opacity 0.8s ease;
+    }
+    #population-counter.hud-hidden {
+      opacity: 0;
+    }
+    .pop-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      animation: popItemIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+    .pop-item.pop-new {
+      animation: popNewSpecies 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+    .pop-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      transition: box-shadow 0.4s ease;
+    }
+    .pop-item.pop-new .pop-dot {
+      animation: dotPulse 0.8s ease-in-out 4;
+    }
+    @keyframes dotPulse {
+      0%, 100% { box-shadow: 0 0 0 0 transparent; }
+      50% { box-shadow: 0 0 8px 3px currentColor; }
+    }
+    .pop-label {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+    .pop-item.pop-new .pop-label {
+      color: rgba(255, 255, 255, 0.85);
+      transition: color 1.5s ease 0.7s;
+    }
+    .pop-count {
+      color: #fff;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      min-width: 16px;
+      text-align: right;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+    .pop-count.pop-count-bump {
+      animation: countBump 0.35s ease;
+    }
+    .pop-separator {
+      width: 1px;
+      height: 16px;
+      background: rgba(255, 255, 255, 0.4);
+      display: inline-block;
+      animation: separatorIn 0.4s ease both;
+    }
+    @keyframes popItemIn {
+      0% { opacity: 0; transform: scale(0.7) translateY(8px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    @keyframes popNewSpecies {
+      0% { opacity: 0; transform: scale(0.3) translateY(12px); }
+      50% { opacity: 1; transform: scale(1.15) translateY(-2px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    @keyframes countBump {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.25); }
+      100% { transform: scale(1); }
+    }
+    @keyframes separatorIn {
+      0% { opacity: 0; transform: scaleY(0); }
+      100% { opacity: 1; transform: scaleY(1); }
+    }
+    /* Portrait / narrow screens — wrap population HUD into 2 rows */
+    @media (max-aspect-ratio: 1/1) {
+      #population-counter {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px 12px;
+        max-width: 80vw;
+      }
+    }
+    /* Perf overlay (hidden by default, shown via ?dev=true) */
+    #perf-overlay {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 10000;
+      background: rgba(0, 0, 0, 0.75);
+      color: #0f0;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 255, 0, 0.2);
+      pointer-events: none;
+      display: none;
+      white-space: pre;
+    }
+  </style>
+</head>
+<body>
+  <div id="perf-overlay"></div>
+  <div id="hud" style="display:none;">
+    <div id="population-counter"></div>
+  </div>
+  <div id="mode-selector" style="display:none;">
+    <button data-mode="narrative" class="active">1 Narrative</button>
+    <button data-mode="model-viewer">2 Viewer</button>
+    <button data-mode="editor">3 Editor</button>
+  </div>
+  <div id="title-screen">
+    <div class="title-buttons">
+      <button class="title-btn" data-narration="false">Start</button>
+      <button class="title-btn" data-narration="true">Start w/ narration</button>
+      <a href="/making-of/" class="title-btn making-of-btn">The Making of...</a>
+    </div>
+    <div class="copyright">&copy; 2026 The Department of Silly Stuff, LLC</div>
+  </div>
+  <div id="fade-overlay"></div>
+  <div id="death-message"><span>The PolyFish have died.</span></div>
+  <div id="credits-overlay">
+    <div id="credits-scroll">
+      <div class="credits-logo">PolyFish</div>
+      <div class="credits-subtitle">Remastered</div>
+      <div class="credits-role">Created by</div>
+      <div class="credits-name">Matt Scott</div>
+      <div class="credits-role">Narrated by</div>
+      <div class="credits-name">Phil Scott</div>
+      <div class="credits-role">Music</div>
+      <div class="credits-name">"Field of Fireflies" by Purrple Cat</div>
+      <div class="credits-detail">purrplecat.com - Promoted by free-stock-music.com</div>
+      <div class="credits-detail">CC BY-SA 3.0</div>
+      <div class="credits-name">"Wonders" by Alex-Productions</div>
+      <div class="credits-detail">onsound.eu - Promoted by free-stock-music.com</div>
+      <div class="credits-detail">CC BY 3.0</div>
+      <div class="credits-name">"Once Upon a Time" by Alex-Productions</div>
+      <div class="credits-detail">onsound.eu - Promoted by free-stock-music.com</div>
+      <div class="credits-detail">CC BY 3.0</div>
+      <div class="credits-role">Sound Effects &amp; Ambience</div>
+      <div class="credits-name">GameMaster Audio</div>
+      <div class="credits-role">Built With</div>
+      <div class="credits-name">Three.js</div>
+      <div class="credits-name">Jolt Physics</div>
+      <div class="credits-name">Claude by Anthropic</div>
+      <div class="credits-thanks">Thanks for Playing!</div>
+      <div class="credits-copyright">&copy; 2026 The Department of Silly Stuff, LLC</div>
+    </div>
+  </div>
+  <!-- Early error catcher — runs before module scripts, catches parse/eval failures -->
+  <script>
+    window.__earlyErrors = [];
+    window.addEventListener('error', function(e) {
+      window.__earlyErrors.push(e.message + ' @ ' + (e.filename||'?') + ':' + e.lineno);
+      var d = document.getElementById('early-diag');
+      if (!d) {
+        d = document.createElement('pre');
+        d.id = 'early-diag';
+        d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:red;color:#fff;font:12px/1.4 monospace;padding:8px;max-height:50vh;overflow-y:auto;white-space:pre-wrap;word-break:break-all;';
+        document.body.appendChild(d);
+      }
+      d.textContent = 'EARLY ERROR:\n' + window.__earlyErrors.join('\n');
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      var msg = 'REJECT: ' + (e.reason && e.reason.message ? e.reason.message : e.reason);
+      window.__earlyErrors.push(msg);
+      var d = document.getElementById('early-diag');
+      if (!d) {
+        d = document.createElement('pre');
+        d.id = 'early-diag';
+        d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:red;color:#fff;font:12px/1.4 monospace;padding:8px;max-height:50vh;overflow-y:auto;white-space:pre-wrap;word-break:break-all;';
+        document.body.appendChild(d);
+      }
+      d.textContent = 'EARLY ERROR:\n' + window.__earlyErrors.join('\n');
+    });
+  </script>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

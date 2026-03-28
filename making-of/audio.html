@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio & Narration  -  Making of PolyFish</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">Making of <span>PolyFish</span></a>
+    <a href="/" class="nav-play-mobile">&#9654; Play PolyFish</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+    </button>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="origins.html">Origins</a>
+      <a href="ai.html">AI Collab</a>
+      <a href="creatures.html">Creatures</a>
+      <a href="ecosystem.html">Ecosystem</a>
+      <a href="kelp.html">Kelp</a>
+      <a href="rendering.html">Rendering</a>
+      <a href="camera.html">Camera</a>
+      <a href="audio.html" class="active">Audio</a>
+      <a href="performance.html">Performance</a>
+      <a href="demos.html">Demos</a>
+      <a href="/" class="nav-play">Play PolyFish</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-header">
+  <div class="breadcrumb">Chapter 07</div>
+  <h1 class="page-title">Audio &amp; Narration</h1>
+  <p class="page-subtitle">The Web Audio API architecture powering spatially-positioned creature sounds, adaptive music mixing, and narration ducking across iOS and mobile browsers.</p>
+</header>
+
+<article>
+
+  <div class="toc">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#web-audio-architecture">Web Audio API Architecture</a></li>
+      <li><a href="#browser-autoplay">Browser Autoplay Policy</a></li>
+      <li><a href="#music-playlist">Music Playlist System</a></li>
+      <li><a href="#narration-ducking">Narration &amp; Music Ducking</a></li>
+      <li><a href="#spatial-audio">Spatial Audio for VR</a></li>
+      <li><a href="#lifecycle">Loading &amp; Lifecycle</a></li>
+    </ol>
+  </div>
+
+  <!-- ────────── Stats ────────── -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">3</div>
+      <div class="stat-label">Gain Channels</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">4</div>
+      <div class="stat-label">Narration Cues</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">3</div>
+      <div class="stat-label">Music Tracks</div>
+    </div>
+  </div>
+
+  <!-- ────────── Section: Web Audio Architecture ────────── -->
+  <h2 id="web-audio-architecture">Web Audio API Architecture</h2>
+
+  <p>PolyFish's audio system sits atop the Web Audio API, which offers low-latency, sample-accurate control over sound playback and mixing. The core design uses a three-channel gain node architecture: <strong>music</strong>, <strong>narration</strong>, and <strong>SFX</strong> (sound effects), each with its own volume control and a master gain node that routes everything to the system output.</p>
+
+  <p>The AudioContext is created lazily  -  only when the page first loads or when the user interacts with the page. This prevents unnecessary browser resource allocation. The context state starts as <code>suspended</code> on mobile browsers, especially iOS Safari, which enforces autoplay policies. Resuming the context requires a user gesture.</p>
+
+  <div class="callout technical">
+    <p><strong>Lazy Initialization</strong>  -  The AudioContext is not created until the first user interaction or until audio is explicitly requested. This respects browser autoplay policies and reduces overhead for users who never play audio. Once created, it remains open for the lifetime of the session.</p>
+  </div>
+
+  <div class="demo-container" id="demo-audio-architecture">
+    <div class="demo-label">Audio Architecture  -  three channels mixing into master output</div>
+  </div>
+
+  <p>The three channels operate independently. Music tracks feed into the music gain node at 0.25 volume (25% of max) to sit underneath narration. Narration clips use the narration channel at 0.85 volume (85% of max) so the voice is prominent. SFX (creature vocalizations, water pops, clicks) use the SFX channel at 0.5 volume (50% of max). The master gain is set to 1.0, relying on the channel volumes to provide the overall mix balance.</p>
+
+  <!-- ────────── Section: Browser Autoplay Policy ────────── -->
+  <h2 id="browser-autoplay">Browser Autoplay Policy</h2>
+
+  <p>Modern browsers restrict autoplay audio without user interaction  -  a policy designed to prevent intrusive sound from playing unexpectedly. iOS Safari is especially strict: the AudioContext starts in a <code>suspended</code> state and cannot produce sound until the user performs a gesture like a click, keydown, or touch event.</p>
+
+  <p>PolyFish handles this by checking the context state and resuming it if needed. The <code>restartMusic()</code> method, which begins playback of the ambient music loop, automatically resumes the context on the first call. If the context is already running, the resume call is a no-op; if it's suspended, it transitions to running and audio becomes audible.</p>
+
+  <div class="callout">
+    <p><strong>Gesture Unlock</strong>  -  iOS requires an actual user gesture (click, tap, or key press) before audio can play. On PolyFish, the first time a user clicks the canvas or presses a key to interact with the scene, the audio context resumes automatically. Subsequent calls to audio playback methods work without additional intervention.</p>
+  </div>
+
+  <div class="demo-container" id="demo-audio-lifecycle">
+    <div class="demo-label">AudioContext Lifecycle  -  suspended → resume (gesture) → running</div>
+  </div>
+
+  <p>The fade-in ramp prevents audible clicks and pops that occur when audio sources start at full volume. A linear ramp from silence to 0.25 over 2 seconds is imperceptible to the listener but prevents digital artifacts.</p>
+
+  <!-- ────────── Section: Music Playlist System ────────── -->
+  <h2 id="music-playlist">Music Playlist System</h2>
+
+  <p>PolyFish features three ambient music tracks that loop indefinitely, creating a shuffled, never-repeating background soundscape. The playlist uses the Fisher-Yates shuffle algorithm to randomize track order, ensuring no two consecutive plays use the same track and avoiding predictable patterns.</p>
+
+  <p>When one track finishes, the system automatically advances to the next via an <code>ended</code> event listener. Each new track starts with a 2-second fade-in to mask the transition and create a crossfading effect. This gives the impression of continuous, seamless music rather than discrete clips starting and stopping.</p>
+
+  <div class="demo-container" id="demo-playlist-shuffle">
+    <div class="demo-label">Playlist Shuffle  -  Fisher-Yates algorithm for variety</div>
+  </div>
+
+  <p>The playlist shuffles itself after every complete cycle (3 tracks), ensuring variety while preventing the same track from appearing back-to-back. This simple Fisher-Yates shuffle runs in O(n) time and produces a uniform random permutation.</p>
+
+  <!-- ────────── Demo 1: Audio Signal Chain ────────── -->
+  <div class="demo-container" id="demo-signal-chain">
+    <div class="demo-label">Audio Signal Chain Diagram</div>
+  </div>
+
+  <!-- ────────── Section: Narration & Music Ducking ────────── -->
+  <h2 id="narration-ducking">Narration &amp; Music Ducking</h2>
+
+  <p>When narration plays, the music automatically "ducks"  -  its volume is reduced to let the voice come through clearly. This is a professional mixing technique used in podcasts, audiobooks, and films. PolyFish implements it as an event-triggered gain reduction that restores the original level when narration ends.</p>
+
+  <p>The system uses four timed narration cues that trigger at specific moments during the simulation:</p>
+
+  <ul>
+    <li><strong>Welcome (4.15s)</strong>  -  Introduction to PolyFish and the ocean scene</li>
+    <li><strong>PolyFish Intro (7.15s)</strong>  -  Explanation of the geometric sea creatures</li>
+    <li><strong>Manatee Intro (74.15s)</strong>  -  The gentle manatee and its behavior</li>
+    <li><strong>Dolphin Intro (104.65s)</strong>  -  The energetic dolphin swimming through</li>
+  </ul>
+
+  <p>Each narration clip is approximately 20-30 seconds long. Music ducking ramps down over 0.8 seconds to allow the voice to cut through cleanly. When narration ends, the music fades back to its original level over the same 0.8-second ramp, creating a smooth transition.</p>
+
+  <pre><code><span class="keyword">const</span> narrationCues = [
+  { time: <span class="number">4.15</span>, clip: <span class="string">'welcome'</span>, duration: <span class="number">28</span> },
+  { time: <span class="number">7.15</span>, clip: <span class="string">'polyfish_intro'</span>, duration: <span class="number">25</span> },
+  { time: <span class="number">74.15</span>, clip: <span class="string">'manatee_intro'</span>, duration: <span class="number">22</span> },
+  { time: <span class="number">104.65</span>, clip: <span class="string">'dolphin_intro'</span>, duration: <span class="number">18</span> },
+];
+
+<span class="function">checkNarrationTriggers</span>(simulationTime) {
+  <span class="keyword">for</span> (<span class="keyword">const</span> cue of narrationCues) {
+    <span class="keyword">if</span> (Math.abs(simulationTime - cue.time) &lt; <span class="number">0.05</span>) {
+      <span class="keyword">this</span>.triggerNarration(cue.clip, cue.duration);
+    }
+  }
+}
+
+<span class="function">triggerNarration</span>(clipName, duration) {
+  <span class="keyword">const</span> buffer = <span class="keyword">this</span>.audioBuffers.get(`narration_${clipName}`);
+  <span class="keyword">const</span> source = <span class="keyword">this</span>.ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(<span class="keyword">this</span>.narrationGain);
+
+  <span class="comment">// Duck music immediately</span>
+  <span class="keyword">const</span> now = <span class="keyword">this</span>.ctx.currentTime;
+  <span class="keyword">this</span>.musicGain.gain.setValueAtTime(
+    <span class="keyword">this</span>.musicGain.gain.value,
+    now
+  );
+  <span class="keyword">this</span>.musicGain.gain.linearRampToValueAtTime(
+    <span class="number">0.075</span>,
+    now
+  );
+
+  <span class="comment">// Restore after narration ends</span>
+  <span class="keyword">this</span>.musicGain.gain.setValueAtTime(
+    <span class="number">0.075</span>,
+    now + duration
+  );
+  <span class="keyword">this</span>.musicGain.gain.linearRampToValueAtTime(
+    <span class="number">0.25</span>,
+    now + duration + <span class="number">0.5</span>
+  );
+
+  source.start(now);
+}</code></pre>
+
+  <p>The ducking ratio is 0.25 → 0.075, a reduction to 30% of the original music volume. This is aggressive enough to keep the narration intelligible while still maintaining some ambient presence. The 0.5-second restore ramp is smooth enough to feel natural but fast enough to re-establish the music soundscape before the next cue.</p>
+
+  <!-- ────────── Demo 2: Narration Timeline ────────── -->
+  <div class="demo-container" id="demo-timeline">
+    <div class="demo-label">Narration Timeline & Music Ducking</div>
+  </div>
+
+  <!-- ────────── Demo 3: Positional vs Stereo Audio ────────── -->
+  <h2 id="positional-demo">Positional vs Stereo Audio Demo</h2>
+
+  <p>This demo lets you experience the difference between stereo panning and positional (3D spatial) audio. The sound source (shown as a circle) can be dragged around the canvas. In stereo mode, the volume remains equal in both ears and only pans left-right. In positional mode, the Web Audio API's PannerNode creates 3D spatial effects - as the source moves, the audio response mimics how your ears would perceive sound in three-dimensional space.</p>
+
+  <div class="demo-container" id="demo-positional-audio">
+    <div class="demo-label">Positional vs Stereo Audio  -  Drag the sound source to hear the difference</div>
+  </div>
+
+  <!-- ────────── Section: Spatial Audio for VR ────────── -->
+  <h2 id="spatial-audio">Spatial Audio for VR</h2>
+
+  <p>PolyFish supports spatial audio positioning for creature vocalizations and ambient sound sources. The Web Audio API provides the <code>PannerNode</code>, which implements HRTF (Head-Related Transfer Function) panning  -  a technique that simulates 3D sound by using frequency-dependent phase and amplitude shifts that mimic how human ears locate sound sources in space.</p>
+
+  <p>Each creature sound source has a position in world space. The listener position (synced to the camera every frame) and the source position determine the pan angle and distance falloff. For PolyFish, the distance model uses inverse falloff over a 1-100 unit range: sounds close to the listener are loud, and sounds far away fade according to the inverse square law.</p>
+
+  <div class="callout technical">
+    <p><strong>HRTF Panning</strong>  -  The PannerNode uses head-related transfer functions to create convincing 3D spatial audio. Even on stereo headphones, HRTF makes it possible to perceive whether a sound is coming from above, below, in front, or behind. PolyFish uses this for creature calls and directional ambient effects.</p>
+  </div>
+
+  <pre><code><span class="comment">// Spatial audio for creature vocalizations</span>
+<span class="function">playCreatureSFX</span>(position, clipName) {
+  <span class="keyword">const</span> buffer = <span class="keyword">this</span>.audioBuffers.get(`sfx_${clipName}`);
+  <span class="keyword">const</span> source = <span class="keyword">this</span>.ctx.createBufferSource();
+  <span class="keyword">const</span> panner = <span class="keyword">this</span>.ctx.createPanner();
+
+  <span class="keyword">source</span>.buffer = buffer;
+
+  <span class="comment">// Configure panner for inverse distance falloff</span>
+  <span class="keyword">panner</span>.panningModel = <span class="string">'HRTF'</span>;
+  <span class="keyword">panner</span>.distanceModel = <span class="string">'inverse'</span>;
+  <span class="keyword">panner</span>.refDistance = <span class="number">1</span>;
+  <span class="keyword">panner</span>.maxDistance = <span class="number">100</span>;
+  <span class="keyword">panner</span>.rolloffFactor = <span class="number">1</span>;
+
+  <span class="comment">// Set source position in 3D space</span>
+  <span class="keyword">panner</span>.positionX.value = position.x;
+  <span class="keyword">panner</span>.positionY.value = position.y;
+  <span class="keyword">panner</span>.positionZ.value = position.z;
+
+  <span class="keyword">source</span>.connect(<span class="keyword">panner</span>);
+  <span class="keyword">panner</span>.connect(<span class="keyword">this</span>.sfxGain);
+  <span class="keyword">source</span>.start(<span class="keyword">this</span>.ctx.currentTime);
+}
+
+<span class="function">updateListenerPosition</span>(cameraPosition, cameraForward) {
+  <span class="keyword">const</span> listener = <span class="keyword">this</span>.ctx.listener;
+
+  <span class="comment">// Listener position synced to camera every frame</span>
+  <span class="keyword">listener</span>.positionX.value = cameraPosition.x;
+  <span class="keyword">listener</span>.positionY.value = cameraPosition.y;
+  <span class="keyword">listener</span>.positionZ.value = cameraPosition.z;
+
+  <span class="comment">// Forward and up vectors for head orientation</span>
+  <span class="keyword">listener</span>.forwardX.value = cameraForward.x;
+  <span class="keyword">listener</span>.forwardY.value = cameraForward.y;
+  <span class="keyword">listener</span>.forwardZ.value = cameraForward.z;
+  <span class="keyword">listener</span>.upX.value = <span class="number">0</span>;
+  <span class="keyword">listener</span>.upY.value = <span class="number">1</span>;
+  <span class="keyword">listener</span>.upZ.value = <span class="number">0</span>;
+}</code></pre>
+
+  <p>The listener's position and orientation are updated every frame in sync with the camera. This creates the illusion that sounds move around the listener's head as they move through the scene. A creature 10 meters to the left will sound like it's coming from the left speaker; as the listener turns, the pan angle shifts accordingly.</p>
+
+  <!-- ────────── Section: Loading & Lifecycle ────────── -->
+  <h2 id="lifecycle">Loading &amp; Lifecycle</h2>
+
+  <p>Audio assets  -  music tracks, narration clips, and SFX  -  are loaded asynchronously in parallel using <code>Promise.allSettled</code>. This prevents a single failed fetch from blocking the entire audio system. Decoded audio buffers are cached in a Map for instant playback without re-decoding overhead.</p>
+
+  <p>When the audio manager is disposed (e.g., on page unload), the AudioContext is closed to release system resources. Any playing sources are stopped, and the buffer cache is cleared.</p>
+
+  <pre><code><span class="keyword">async</span> <span class="function">loadAudioAssets</span>() {
+  <span class="keyword">const</span> files = [
+    { key: <span class="string">'music_0'</span>, url: <span class="string">'/audio/ambient_track_1.mp3'</span> },
+    { key: <span class="string">'music_1'</span>, url: <span class="string">'/audio/ambient_track_2.mp3'</span> },
+    { key: <span class="string">'music_2'</span>, url: <span class="string">'/audio/ambient_track_3.mp3'</span> },
+    { key: <span class="string">'narration_welcome'</span>, url: <span class="string">'/audio/narration_welcome.mp3'</span> },
+    { key: <span class="string">'narration_polyfish_intro'</span>, url: <span class="string">'/audio/narration_polyfish.mp3'</span> },
+    { key: <span class="string">'sfx_dolphin_click'</span>, url: <span class="string">'/audio/sfx_dolphin.mp3'</span> },
+    <span class="comment">// ... more assets</span>
+  ];
+
+  <span class="keyword">const</span> results = <span class="keyword">await</span> Promise.allSettled(
+    files.map(async (f) =&gt; {
+      <span class="keyword">const</span> resp = <span class="keyword">await</span> fetch(f.url);
+      <span class="keyword">const</span> arrayBuf = <span class="keyword">await</span> resp.arrayBuffer();
+      <span class="keyword">const</span> decoded = <span class="keyword">await</span> <span class="keyword">this</span>.ctx.decodeAudioData(arrayBuf);
+      <span class="keyword">this</span>.audioBuffers.set(f.key, decoded);
+    })
+  );
+
+  <span class="comment">// Log any failures but continue</span>
+  <span class="keyword">for</span> (<span class="keyword">const</span> result of results) {
+    <span class="keyword">if</span> (result.status === <span class="string">'rejected'</span>) {
+      console.error(<span class="string">'Audio asset load failed:'</span>, result.reason);
+    }
+  }
+}
+
+<span class="function">dispose</span>() {
+  <span class="keyword">if</span> (<span class="keyword">this</span>.currentTrack) {
+    <span class="keyword">this</span>.currentTrack.source.stop();
+  }
+  <span class="keyword">if</span> (<span class="keyword">this</span>.ctx) {
+    <span class="keyword">this</span>.ctx.close();
+  }
+  <span class="keyword">this</span>.audioBuffers.clear();
+}</code></pre>
+
+  <p>Using <code>Promise.allSettled</code> rather than <code>Promise.all</code> ensures that a single corrupt or missing audio file doesn't prevent the rest from loading. The game can continue to run with degraded audio  -  music might be missing, but narration and SFX can still function. This graceful degradation is crucial for a robust web audio experience.</p>
+
+  <!-- ── Page Navigation ── -->
+  <div class="page-nav">
+    <a href="camera.html">
+      <span class="nav-dir">&larr; Previous</span>
+      <span class="nav-title">Cinematic Camera</span>
+    </a>
+    <a href="performance.html">
+      <span class="nav-dir">Next &rarr;</span>
+      <span class="nav-title">Performance</span>
+    </a>
+  </div>
+
+</article>
+
+<footer>
+  <a href="/" class="footer-play">Play PolyFish</a><br>
+  &copy; 2026 The Department of Silly Stuff, LLC
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════════
+     DEMO SCRIPTS
+     ══════════════════════════════════════════════════════════════ -->
+<script type="module">
+// Import demo modules
+import { init as initSignalChain } from './demos/audio-signal-chain.js';
+import { init as initTimeline } from './demos/audio-narration-timeline.js';
+import { init as initPositional } from './demos/audio-positional.js';
+import { initArchitecture, initLifecycle, initPlaylistShuffle } from './demos/audio-diagrams.js';
+
+// Initialize all demos
+document.addEventListener('DOMContentLoaded', () => {
+  const architectureContainer = document.getElementById('demo-audio-architecture');
+  const lifecycleContainer = document.getElementById('demo-audio-lifecycle');
+  const shuffleContainer = document.getElementById('demo-playlist-shuffle');
+  const signalChainContainer = document.getElementById('demo-signal-chain');
+  const timelineContainer = document.getElementById('demo-timeline');
+  const positionalContainer = document.getElementById('demo-positional-audio');
+
+  if (architectureContainer) initArchitecture(architectureContainer);
+  if (lifecycleContainer) initLifecycle(lifecycleContainer);
+  if (shuffleContainer) initPlaylistShuffle(shuffleContainer);
+  if (signalChainContainer) initSignalChain(signalChainContainer);
+  if (timelineContainer) initTimeline(timelineContainer);
+  if (positionalContainer) initPositional(positionalContainer);
+});
+
+</script>
+
+</body>
+</html>

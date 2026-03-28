@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Demos  -  Making of PolyFish</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .demos-grid {
+      max-width: var(--wide-width);
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+    .demo-page-section {
+      margin-bottom: 3rem;
+    }
+    .demo-page-section h2 {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+    .demo-page-section .section-desc {
+      color: var(--fg-muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+    .demo-page-section .section-link {
+      color: var(--accent-secondary);
+      text-decoration: none;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .demo-page-section .section-link:hover {
+      color: var(--accent);
+    }
+
+    /* Pagination tabs */
+    .demo-tabs {
+      max-width: var(--wide-width);
+      margin: 0 auto 2rem;
+      padding: 0 2rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .demo-tab {
+      padding: 0.5rem 1rem;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--fg-muted);
+      font-family: var(--font-body);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .demo-tab:hover {
+      border-color: var(--border-glow);
+      color: var(--fg);
+    }
+    .demo-tab.active {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .demo-page-section {
+      display: none;
+    }
+    .demo-page-section.visible {
+      display: block;
+    }
+
+    /* Loading state */
+    .demo-slot {
+      min-height: 300px;
+      position: relative;
+    }
+    .demo-slot.loading::before {
+      content: 'Loading demo...';
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--fg-subtle);
+      font-size: 0.85rem;
+      letter-spacing: 0.04em;
+    }
+
+    /* Sleep overlay for heavy demos */
+    .demo-sleep-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border-radius: var(--radius);
+      transition: opacity 0.35s;
+      overflow: hidden;
+    }
+    /* Frozen frame as background */
+    .demo-sleep-overlay .sleep-frame {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      filter: brightness(0.35) saturate(0.6);
+      transition: filter 0.25s;
+    }
+    .demo-sleep-overlay:hover .sleep-frame {
+      filter: brightness(0.5) saturate(0.8);
+    }
+    /* Fallback when no frame captured yet */
+    .demo-sleep-overlay .sleep-frame.empty {
+      background: rgba(10, 22, 40, 0.8);
+    }
+    .demo-sleep-overlay .sleep-controls {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .demo-sleep-overlay .sleep-icon {
+      width: 48px;
+      height: 48px;
+      border: 2px solid var(--accent);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 0.75rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+      background: rgba(10, 22, 40, 0.6);
+    }
+    .demo-sleep-overlay:hover .sleep-icon {
+      transform: scale(1.1);
+      box-shadow: 0 0 20px rgba(255, 153, 51, 0.3);
+    }
+    .demo-sleep-overlay .sleep-icon svg {
+      margin-left: 3px;
+    }
+    .demo-sleep-overlay .sleep-label {
+      color: var(--fg-muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    }
+
+    @media (max-width: 768px) {
+      .demos-grid { padding: 0 1rem; }
+      .demo-tabs { padding: 0 1rem; }
+      .demo-tab { font-size: 0.7rem; padding: 0.4rem 0.7rem; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">Making of <span>PolyFish</span></a>
+    <a href="/" class="nav-play-mobile">&#9654; Play PolyFish</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+    </button>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="origins.html">Origins</a>
+      <a href="ai.html">AI Collab</a>
+      <a href="creatures.html">Creatures</a>
+      <a href="ecosystem.html">Ecosystem</a>
+      <a href="kelp.html">Kelp</a>
+      <a href="rendering.html">Rendering</a>
+      <a href="camera.html">Camera</a>
+      <a href="audio.html">Audio</a>
+      <a href="performance.html">Performance</a>
+      <a href="demos.html" class="active">Demos</a>
+      <a href="/" class="nav-play">Play PolyFish</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-header">
+  <div class="breadcrumb">Playground</div>
+  <h1 class="page-title">Interactive Demos</h1>
+  <p class="page-subtitle">All the interactive demos from the Making Of chapters in one place. Pick a category and play.</p>
+</header>
+
+<div class="demo-tabs" id="demo-tabs">
+  <button class="demo-tab active" data-page="creatures">Creatures</button>
+  <button class="demo-tab" data-page="ecosystem">Ecosystem</button>
+  <button class="demo-tab" data-page="kelp">Kelp Physics</button>
+  <button class="demo-tab" data-page="rendering">Rendering</button>
+  <button class="demo-tab" data-page="camera">Camera</button>
+  <button class="demo-tab" data-page="audio">Audio</button>
+  <button class="demo-tab" data-page="performance">Performance</button>
+</div>
+
+<div class="demos-grid">
+
+  <!-- ── Creatures ── -->
+  <div class="demo-page-section visible" id="page-creatures">
+    <h2>Creatures &amp; AI</h2>
+    <p class="section-desc">3D creature models with vertex-shader swim animation, and a thrust/drag physics simulator.</p>
+    <a href="creatures.html" class="section-link">Read the full chapter &rarr;</a>
+    <div class="demo-container demo-slot loading" id="slot-creature-viewers" style="margin-top:1rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-velocity-lerp" style="margin-top:1.5rem;"></div>
+  </div>
+
+  <!-- ── Ecosystem ── -->
+  <div class="demo-page-section" id="page-ecosystem">
+    <h2>Ecosystem &amp; Food Chain</h2>
+    <p class="section-desc">A self-sustaining predator-prey simulation with fish, dolphins, and food particles.</p>
+    <a href="ecosystem.html" class="section-link">Read the full chapter &rarr;</a>
+    <div class="demo-container demo-slot loading" id="slot-ecosystem" style="margin-top:1rem;"></div>
+  </div>
+
+  <!-- ── Kelp ── -->
+  <div class="demo-page-section" id="page-kelp">
+    <h2>Kelp &amp; Verlet Physics</h2>
+    <p class="section-desc">Position-based dynamics with interactive chains, ocean currents, and creature impulse propagation.</p>
+    <a href="kelp.html" class="section-link">Read the full chapter &rarr;</a>
+    <div class="demo-container demo-slot loading" id="slot-verlet-chain" style="margin-top:1rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-ocean-current" style="margin-top:1.5rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-impulse" style="margin-top:1.5rem;"></div>
+  </div>
+
+  <!-- ── Rendering ── -->
+  <div class="demo-page-section" id="page-rendering">
+    <h2>Rendering &amp; Shaders</h2>
+    <p class="section-desc">Voronoi caustic patterns, volumetric god rays, and animated water surfaces.</p>
+    <a href="rendering.html" class="section-link">Read the full chapter &rarr;</a>
+    <div class="demo-container demo-slot loading" id="slot-caustics" style="margin-top:1rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-godrays" style="margin-top:1.5rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-water-surface" style="margin-top:1.5rem;"></div>
+  </div>
+
+  <!-- ── Camera ── -->
+  <div class="demo-page-section" id="page-camera">
+    <h2>Cinematic Camera</h2>
+    <p class="section-desc">Shot type visualizer, narrative timeline, and the three-layer camera architecture.</p>
+    <a href="camera.html" class="section-link">Read the full chapter &rarr;</a>
+    <div class="demo-container demo-slot loading" id="slot-shot-types" style="margin-top:1rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-timeline" style="margin-top:1.5rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-director-flow" style="margin-top:1.5rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-cinematographer-flow" style="margin-top:1.5rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-scout-scores" style="margin-top:1.5rem;"></div>
+  </div>
+
+  <!-- ── Audio ── -->
+  <div class="demo-page-section" id="page-audio">
+    <h2>Audio &amp; Narration</h2>
+    <p class="section-desc">Web Audio API signal chains, spatial panning, and narration timeline with music ducking.</p>
+    <a href="audio.html" class="section-link">Read the full chapter &rarr;</a>
+    <div class="demo-container demo-slot loading" id="slot-signal-chain" style="margin-top:1rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-narration-timeline" style="margin-top:1.5rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-positional-audio" style="margin-top:1.5rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-audio-diagrams" style="margin-top:1.5rem;"></div>
+  </div>
+
+  <!-- ── Performance ── -->
+  <div class="demo-page-section" id="page-performance">
+    <h2>Performance</h2>
+    <p class="section-desc">Spatial hashing, vertex-shader swim animation editor, and GPU instancing comparison.</p>
+    <a href="performance.html" class="section-link">Read the full chapter &rarr;</a>
+    <div class="demo-container demo-slot loading" id="slot-spatial-hash" style="margin-top:1rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-swim-editor" style="margin-top:1.5rem;"></div>
+    <div class="demo-container demo-slot loading" id="slot-instancing" style="margin-top:1.5rem;"></div>
+  </div>
+
+</div>
+
+<footer>
+  <a href="/" class="footer-play">Play PolyFish</a><br>
+  &copy; 2026 The Department of Silly Stuff, LLC
+</footer>
+
+<script type="module">
+// ── Demo Loaders ──
+// Each loader uses a static import() path so Vite can analyze them.
+const loaders = {
+  'creature-viewers':        () => import('./demos/creature-viewers.js'),
+  'velocity-lerp':           () => import('./demos/velocity-lerp.js'),
+  'ecosystem-sim':           () => import('./demos/ecosystem-sim.js'),
+  'verlet-chain':            () => import('./demos/verlet-chain.js'),
+  'ocean-current':           () => import('./demos/ocean-current.js'),
+  'impulse-propagation':     () => import('./demos/impulse-propagation.js'),
+  'caustics':                () => import('./demos/caustics.js'),
+  'godrays':                 () => import('./demos/godrays.js'),
+  'water-surface':           () => import('./demos/water-surface.js'),
+  'camera-shot-types':       () => import('./demos/camera-shot-types.js'),
+  'camera-timeline':         () => import('./demos/camera-timeline.js'),
+  'camera-director-flow':    () => import('./demos/camera-director-flow.js'),
+  'camera-cinematographer':  () => import('./demos/camera-cinematographer-flow.js'),
+  'camera-scout-scores':     () => import('./demos/camera-scout-scores.js'),
+  'audio-signal-chain':      () => import('./demos/audio-signal-chain.js'),
+  'audio-narration-timeline':() => import('./demos/audio-narration-timeline.js'),
+  'audio-positional':        () => import('./demos/audio-positional.js'),
+  'audio-diagrams':          () => import('./demos/audio-diagrams.js'),
+  'spatial-hash':            () => import('./demos/spatial-hash.js'),
+  'swim-editor':             () => import('./demos/swim-editor.js'),
+  'instancing-comparison':   () => import('./demos/instancing-comparison.js'),
+};
+
+// ── Demo Registry ──
+const registry = {
+  creatures: [
+    { slot: 'slot-creature-viewers', loader: 'creature-viewers' },
+    { slot: 'slot-velocity-lerp',    loader: 'velocity-lerp' },
+  ],
+  ecosystem: [
+    { slot: 'slot-ecosystem', loader: 'ecosystem-sim' },
+  ],
+  kelp: [
+    { slot: 'slot-verlet-chain',  loader: 'verlet-chain' },
+    { slot: 'slot-ocean-current', loader: 'ocean-current' },
+    { slot: 'slot-impulse',       loader: 'impulse-propagation' },
+  ],
+  rendering: [
+    { slot: 'slot-caustics',       loader: 'caustics' },
+    { slot: 'slot-godrays',        loader: 'godrays' },
+    { slot: 'slot-water-surface',  loader: 'water-surface' },
+  ],
+  camera: [
+    { slot: 'slot-shot-types',             loader: 'camera-shot-types' },
+    { slot: 'slot-timeline',               loader: 'camera-timeline' },
+    { slot: 'slot-director-flow',          loader: 'camera-director-flow' },
+    { slot: 'slot-cinematographer-flow',   loader: 'camera-cinematographer' },
+    { slot: 'slot-scout-scores',           loader: 'camera-scout-scores' },
+  ],
+  audio: [
+    { slot: 'slot-signal-chain',       loader: 'audio-signal-chain' },
+    { slot: 'slot-narration-timeline', loader: 'audio-narration-timeline' },
+    { slot: 'slot-positional-audio',   loader: 'audio-positional' },
+    { slot: 'slot-audio-diagrams',     loader: 'audio-diagrams', initFn: 'initArchitecture' },
+  ],
+  performance: [
+    { slot: 'slot-spatial-hash', loader: 'spatial-hash' },
+    { slot: 'slot-swim-editor',  loader: 'swim-editor' },
+    { slot: 'slot-instancing',   loader: 'instancing-comparison' },
+  ],
+};
+
+// ── State ──
+const prepared = new Set();
+const initialized = new Set();
+// Track which demo is currently awake per page (mutual exclusion)
+const awakeSlot = {};       // pageId -> slotId
+const slotFrames = {};      // slotId -> dataURL of captured frame
+const slotPage = {};        // slotId -> pageId (reverse lookup)
+
+// Build reverse lookup: slotId -> pageId
+for (const [pageId, demos] of Object.entries(registry)) {
+  for (const demo of demos) slotPage[demo.slot] = pageId;
+}
+
+// ── Capture a frame from a demo slot's first canvas ──
+function captureFrame(slot) {
+  const canvas = slot.querySelector('canvas');
+  if (!canvas || canvas.width === 0) return null;
+  try { return canvas.toDataURL('image/jpeg', 0.5); } catch { return null; }
+}
+
+// ── Build sleep overlay (with optional frozen frame) ──
+function buildOverlay(slot, demo) {
+  const overlay = document.createElement('div');
+  overlay.className = 'demo-sleep-overlay';
+
+  const frame = document.createElement('div');
+  const frameUrl = slotFrames[demo.slot];
+  if (frameUrl) {
+    frame.className = 'sleep-frame';
+    frame.style.backgroundImage = `url(${frameUrl})`;
+  } else {
+    frame.className = 'sleep-frame empty';
+  }
+
+  overlay.appendChild(frame);
+  overlay.innerHTML += `
+    <div class="sleep-controls">
+      <div class="sleep-icon">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <polygon points="7,4 16,10 7,16" fill="var(--accent)"/>
+        </svg>
+      </div>
+      <span class="sleep-label">Click to play</span>
+    </div>
+  `;
+
+  overlay.addEventListener('click', () => wakeDemo(slot, demo));
+  slot.style.position = 'relative';
+  slot.appendChild(overlay);
+  return overlay;
+}
+
+// ── Put a demo to sleep (capture frame, show overlay) ──
+function sleepDemo(slot, demo) {
+  // Capture frame before overlaying
+  const frame = captureFrame(slot);
+  if (frame) slotFrames[demo.slot] = frame;
+
+  // Remove any existing overlay first
+  const existing = slot.querySelector('.demo-sleep-overlay');
+  if (existing) existing.remove();
+
+  buildOverlay(slot, demo);
+}
+
+// ── Wake a demo (init if needed, sleep siblings) ──
+async function wakeDemo(slot, demo) {
+  const pageId = slotPage[demo.slot];
+
+  // Sleep the currently-awake demo in this page (if different)
+  const currentAwake = awakeSlot[pageId];
+  if (currentAwake && currentAwake !== demo.slot) {
+    const siblingSlot = document.getElementById(currentAwake);
+    const siblingDemo = registry[pageId].find(d => d.slot === currentAwake);
+    if (siblingSlot && siblingDemo) {
+      sleepDemo(siblingSlot, siblingDemo);
+    }
+  }
+
+  // Remove our overlay
+  const overlay = slot.querySelector('.demo-sleep-overlay');
+  if (overlay) {
+    overlay.style.opacity = '0';
+    setTimeout(() => overlay.remove(), 300);
+  }
+
+  awakeSlot[pageId] = demo.slot;
+
+  // Initialize if not already done
+  if (!initialized.has(demo.slot)) {
+    initialized.add(demo.slot);
+    slot.classList.remove('loading');
+    try {
+      const load = loaders[demo.loader];
+      if (!load) throw new Error(`No loader for "${demo.loader}"`);
+      const mod = await load();
+      const fn = demo.initFn ? mod[demo.initFn] : mod.init;
+      if (typeof fn === 'function') fn(slot);
+    } catch (err) {
+      console.warn(`Failed to load demo ${demo.loader}:`, err);
+      slot.innerHTML = `<div style="color: var(--fg-subtle); text-align: center; padding: 2rem; font-size: 0.85rem;">Demo could not be loaded</div>`;
+    }
+  }
+}
+
+// ── Load a page tab: wake first demo, sleep the rest ──
+async function loadPage(pageId) {
+  if (prepared.has(pageId)) return;
+  prepared.add(pageId);
+
+  const demos = registry[pageId];
+  if (!demos) return;
+
+  for (let i = 0; i < demos.length; i++) {
+    const demo = demos[i];
+    const slot = document.getElementById(demo.slot);
+    if (!slot) continue;
+
+    if (i === 0) {
+      awakeSlot[pageId] = demo.slot;
+      await wakeDemo(slot, demo);
+    } else {
+      slot.classList.remove('loading');
+      buildOverlay(slot, demo);
+    }
+  }
+}
+
+// ── Tab switching ──
+const tabs = document.querySelectorAll('.demo-tab');
+const sections = document.querySelectorAll('.demo-page-section');
+
+function switchPage(pageId) {
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.page === pageId));
+  sections.forEach(s => s.classList.toggle('visible', s.id === `page-${pageId}`));
+  loadPage(pageId);
+}
+
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => switchPage(tab.dataset.page));
+});
+
+// Load the first page
+loadPage('creatures');
+</script>
+
+</body>
+</html>

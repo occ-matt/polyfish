@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Performance  -  Making of PolyFish</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">Making of <span>PolyFish</span></a>
+    <a href="/" class="nav-play-mobile">&#9654; Play PolyFish</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+    </button>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="origins.html">Origins</a>
+      <a href="ai.html">AI Collab</a>
+      <a href="creatures.html">Creatures</a>
+      <a href="ecosystem.html">Ecosystem</a>
+      <a href="kelp.html">Kelp</a>
+      <a href="rendering.html">Rendering</a>
+      <a href="camera.html">Camera</a>
+      <a href="audio.html">Audio</a>
+      <a href="performance.html" class="active">Performance</a>
+      <a href="demos.html">Demos</a>
+      <a href="/" class="nav-play">Play PolyFish</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-header">
+  <div class="breadcrumb">Chapter 08</div>
+  <h1 class="page-title">Performance</h1>
+  <p class="page-subtitle">How PolyFish maintains 60fps with thousands of creatures possible, physics-driven kelp, particle effects, and cinematic rendering - all running in a single browser tab.</p>
+</header>
+
+<article>
+
+  <div class="toc">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#challenge">The Challenge</a></li>
+      <li><a href="#pooling">Object Pooling</a></li>
+      <li><a href="#spatial">Spatial Hashing</a></li>
+      <li><a href="#swim-animation">Vertex Swim Animation</a></li>
+      <li><a href="#instancing">GPU Instancing</a></li>
+      <li><a href="#lod">LOD Systems</a></li>
+      <li><a href="#ai-budget">AI Budget &amp; Staggering</a></li>
+      <li><a href="#memory">Zero-Allocation Loops</a></li>
+      <li><a href="#vr">VR Scaling</a></li>
+    </ol>
+  </div>
+
+  <!-- ── The Challenge ── -->
+  <h2 id="challenge">The Challenge</h2>
+
+  <p>PolyFish isn't a static scene. The architecture is designed to support thousands of creatures, with the goal of drawing as many as performance allows. The current demo runs 60 fish with AI brains, 15 dolphins hunting them, 10 manatees grazing kelp, 60 kelp plants with full Verlet physics (13 nodes each), 80 food particles, 1024 pooled VFX particles, caustic shaders, water surface animation, spatial audio, and a cinematic camera system. All of that needs to fit inside a 16ms frame budget.</p>
+
+  <p>The core philosophy: <strong>never do work the player can't see</strong>, and <strong>never allocate memory the garbage collector has to clean up</strong>. Every optimization in PolyFish falls into one of these two categories.</p>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-value">~200</div>
+      <div class="stat-label">Active entities per frame</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">16ms</div>
+      <div class="stat-label">Frame budget at 60fps</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">5</div>
+      <div class="stat-label">Total draw calls (creatures + plants)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">0</div>
+      <div class="stat-label">Per-frame heap allocations</div>
+    </div>
+  </div>
+
+  <!-- ── Object Pooling ── -->
+  <h2 id="pooling">Object Pooling</h2>
+
+  <p>Every entity in PolyFish  -  fish, dolphins, manatees, food, seeds, plants, and VFX particles  -  comes from an object pool. Nothing is created with <code>new</code> during gameplay. When a fish dies and a new one spawns, we're reusing the same object with reset state.</p>
+
+  <p>The pool uses a swap-remove strategy on its <strong>active array</strong> for O(1) release. When an entity is released, it's swapped with the last active element and the array length is decremented  -  no splice, no indexOf scan. The pool tracks active items separately from the full capacity, so iterating over living entities never touches dead slots.</p>
+
+  <div class="comparison">
+    <div>
+      <h4>Without Pooling</h4>
+      <p>Every spawn calls <code>new Creature()</code>, allocating meshes, materials, typed arrays, and AI state. Every death sends all of that to the garbage collector. GC pauses cause visible frame stutters, especially on mobile.</p>
+    </div>
+    <div>
+      <h4>With Pooling</h4>
+      <p>Creatures are pre-allocated at load time. Spawn resets position, health, and AI state on an existing object. Death marks it inactive. Zero allocation, zero GC pressure, zero stutters.</p>
+    </div>
+  </div>
+
+  <pre><code><span class="comment">// O(1) release via swap-remove  -  no array splice needed</span>
+<span class="keyword">release</span>(entity) {
+  <span class="keyword">const</span> idx = entity._poolActiveIndex;
+  <span class="keyword">const</span> last = <span class="keyword">this</span>.active[<span class="keyword">this</span>.active.length - <span class="number">1</span>];
+  <span class="keyword">this</span>.active[idx] = last;
+  last._poolActiveIndex = idx;
+  <span class="keyword">this</span>.active.length--;
+  entity._poolActive = <span class="keyword">false</span>;
+}</code></pre>
+
+  <h3>Pool Sizes and Dynamic Growth</h3>
+
+  <p>Pool sizes are tuned per platform. Desktop gets generous headroom (up to 2000 slots per type for dynamic growth), while VR uses tighter budgets to stay within the stricter frame requirements of head-mounted displays. During development, the initial pool sizes were regularly exceeded as the simulation grew in complexity - they were a starting point, not a hard limit. When demand exceeded capacity, pools would dynamically expand to accommodate the growing ecosystem.</p>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-value">60</div>
+      <div class="stat-label">Fish pool (desktop)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">15</div>
+      <div class="stat-label">Dolphin pool</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">60</div>
+      <div class="stat-label">Plant pool</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">1024</div>
+      <div class="stat-label">VFX particle pool</div>
+    </div>
+  </div>
+
+  <!-- ── Spatial Hashing ── -->
+  <h2 id="spatial">Spatial Hashing</h2>
+
+  <p>Without spatial partitioning, checking whether a dolphin is near any fish requires comparing every dolphin against every fish  -  O(n&sup2;) checks per frame. With 85 creatures, that's 7,225 distance calculations. Spatial hashing reduces this to O(nearby) by dividing the world into a grid and only checking entities in adjacent cells.</p>
+
+  <p>PolyFish uses a <strong>2D grid on the XZ plane</strong> (the ocean floor plane) with a cell size of 5 units. Each cell is indexed by a Cantor pairing hash of the cell coordinates: <code>((cx * 73856093) ^ (cz * 19349663)) | 0</code>. The hash is rebuilt every 33ms (~30 Hz), matching the fastest AI tick rate.</p>
+
+  <p>Two separate hashes run in parallel: one for <strong>creature-creature</strong> interactions (separation forces, predator detection, flee responses) and one for <strong>creature-food</strong> queries (foraging, eating). Each query reuses a pre-allocated results array  -  no arrays are created during lookups.</p>
+
+  <pre><code><span class="comment">// Pre-allocated result arrays  - zero allocation per query</span>
+<span class="keyword">const</span> _hashResults = [];        <span class="comment">// creature-creature</span>
+<span class="keyword">const</span> _foodHashResults = [];    <span class="comment">// creature-food</span>
+
+<span class="comment">// Query: find all creatures within radius of position</span>
+creatureHash.<span class="function">query</span>(creature.x, creature.z, fleeRadius, _hashResults);
+<span class="comment">// _hashResults now contains nearby creatures  - no allocation occurred</span></code></pre>
+
+  <!-- ── Demo: Spatial Hash Visualizer ── -->
+  <div class="demo-container" id="demo-spatial-hash-container"></div>
+
+  <!-- ── Vertex Swim Animation ── -->
+  <h2 id="swim-animation">Vertex Swim Animation</h2>
+
+  <!-- Interactive Demo: Animation Editor (model-viewer style) -->
+  <div class="demo-container swim-editor-demo" id="swim-editor-container"></div>
+
+  <p>Creatures don't use skeletal animation or play recorded loops. Instead, the mesh deformation happens in the <strong>vertex shader</strong>, driven by a traveling sine wave. This allows smooth, continuous animation that never loops or stutters, and it scales effortlessly to hundreds of creatures without animation state overhead. This procedural approach to creature animation was inspired by techniques shared in the <a href="https://youtu.be/st5YBGl0wJ4" target="_blank">Abzu GDC talk</a>.</p>
+
+  <h3>The Wave Function</h3>
+  <p>Each vertex on the mesh has a Y-position (or Z-position for bottom-feeders). A sine wave travels along the creature's body from front to back (for fish) or top to bottom (for dolphins/manatees). The wave frequency, amplitude, and phase all vary per-creature instance, created via instanced vertex attributes.</p>
+
+  <pre><code><span class="comment">// Vertex shader swim animation (simplified)</span>
+<span class="keyword">attribute float</span> <span class="type">aPhase</span>;      <span class="comment">// Per-instance phase offset</span>
+<span class="keyword">attribute float</span> <span class="type">aFrequency</span>;  <span class="comment">// Oscillation rate (Hz)</span>
+<span class="keyword">attribute float</span> <span class="type">aAmplitude</span>;  <span class="comment">// Wave height</span>
+
+<span class="keyword">varying float</span> <span class="type">vDistance</span>;
+<span class="keyword">varying float</span> <span class="type">vWave</span>;
+
+<span class="keyword">void</span> <span class="function">main</span>() {
+  <span class="comment">// Distance along body (0 at head, 1 at tail)</span>
+  vDistance = position.x; <span class="comment">// Assuming fish-like orientation</span>
+
+  <span class="comment">// Wave phase: depends on time, distance, and per-instance params</span>
+  <span class="keyword">float</span> wavePhase = uTime * aFrequency + vDistance + aPhase;
+  <span class="keyword">float</span> waveOffset = sin(wavePhase) * aAmplitude;
+
+  <span class="comment">// Apply side-to-side (X) displacement for fish</span>
+  vec3 deformedPos = position;
+  deformedPos.x += waveOffset;
+
+  <span class="comment">// Eye region gets masked to prevent sliding</span>
+  <span class="keyword">float</span> eyeMask = smoothstep(<span class="number">-1.0</span>, <span class="number">0.2</span>, vDistance);
+  deformedPos.x = mix(position.x, deformedPos.x, eyeMask);
+
+  gl_Position = projectionMatrix * viewMatrix * vec4(deformedPos, <span class="number">1.0</span>);
+}</code></pre>
+
+  <h3>Species-Specific Patterns</h3>
+
+  <p><strong>Fish:</strong> Side-to-side oscillation (X-axis) at 1.5 Hz. The wave travels from snout to tail, creating the classic "S-curve" swim pattern. The eye region (front 20% of the mesh) is masked so the head barely moves, keeping the eye stable and readable.</p>
+
+  <p><strong>Dolphins:</strong> Vertical oscillation (Y-axis) at 1.2 Hz. The wave travels from spine to flukes. The entire body flexes up-and-down, which is how real dolphins swim.</p>
+
+  <p><strong>Manatees:</strong> Vertical oscillation (Y-axis) at 1.0 Hz - slower and more leisurely. The tail creates most of the propulsion while the body stays relatively straight.</p>
+
+  <!-- ── GPU Instancing ── -->
+  <h2 id="instancing">GPU Instancing</h2>
+
+  <p>Without instancing, rendering 60 fish means 60 separate draw calls  -  each one a full GPU state change (bind vertex buffer, bind material, set uniforms, draw). PolyFish uses <code>THREE.InstancedMesh</code> to render all creatures of a species in a single draw call. The GPU receives one mesh and a list of per-instance transforms, drawing all 60 fish at once.</p>
+
+  <p>This drops creature rendering from <strong>85+ draw calls to just 3</strong> (one per species). Plants use the same technique, collapsing 60 individual plant meshes into 1 draw call. Food and seeds add 2 more. The entire scene renders in roughly 5-7 draw calls for all dynamic entities.</p>
+
+  <h3>Per-Instance Swim Animation</h3>
+
+  <p>The swim animation can't use a shared uniform because each creature has a different phase and amplitude. Instead, PolyFish stores swim parameters as <code>InstancedBufferAttribute</code> values  -  per-instance data that the vertex shader reads to compute unique wave displacement for each fish. This means 60 uniquely-animated fish in a single draw call.</p>
+
+  <!-- ── Demo: Instancing Comparison ── -->
+  <div class="demo-container" id="demo-instancing-container"></div>
+
+  <h3>Plant Bone Textures</h3>
+
+  <p>Plants are more complex  -  each has 13 bones driven by Verlet physics, and every instance has a unique pose. The solution: pack all bone matrices into a <strong>DataTexture</strong> (52 pixels wide &times; N instances tall, RGBA32F). The vertex shader reads bone transforms via <code>texelFetch</code> using the instance ID as the texture row. This eliminates per-plant draw calls entirely while preserving unique skeletal animation.</p>
+
+  <!-- ── LOD Systems ── -->
+  <h2 id="lod">LOD Systems (Computational)</h2>
+
+  <p>Not everything needs full detail. PolyFish runs a three-tier computational LOD system based on camera distance, updated every 250ms (not every frame) to avoid the cost of continuous distance checks. This is not about reducing polygon count at distance - it's about reducing the frequency and complexity of AI updates, physics calculations, and behavior simulation for distant creatures.</p>
+
+  <div class="comparison">
+    <div>
+      <h4>LOD 0 (&lt; 15 units)</h4>
+      <p>Full simulation. Complete AI with separation forces, full Verlet physics with 3 constraint iterations, collision detection active, shadow casting enabled.</p>
+    </div>
+    <div>
+      <h4>LOD 1 (15 - 30 units)</h4>
+      <p>Reduced computation. AI runs but separation is simplified. Verlet physics runs every 2nd frame with 1 constraint iteration. Collision detection disabled. Still visible and behaviorally convincing but with reduced computational cost.</p>
+    </div>
+    <div>
+      <h4>LOD 2 (&gt; 30 units)</h4>
+      <p>Minimal computation. AI skips separation entirely. Plants use procedural sway instead of Verlet. Collision detection skipped. Shadow casting disabled. Visual mesh remains the same - only the simulation complexity is reduced.</p>
+    </div>
+  </div>
+
+  <p>The computational savings compound. A distant kelp plant at LOD 2 skips Verlet constraint solving and collision entirely, uses a simple sine-wave sway instead, and doesn't participate in collision tests. That's roughly 80% less simulation work per plant compared to LOD 0, even though the mesh itself is rendered at the same visual quality.</p>
+
+  <h3>Caustic Shader LOD</h3>
+
+  <p>The caustic light pattern shader also has a LOD system. Close objects get the full dual-octave Voronoi computation. Distant objects only evaluate the coarse first octave, cutting shader complexity in half. Both LODs fade with distance anyway, so the transition is invisible.</p>
+
+  <!-- ── AI Budget & Staggering ── -->
+  <h2 id="ai-budget">AI Budget &amp; Staggering</h2>
+
+  <p>Creature AI is the most expensive per-entity cost in the simulation. Each brain tick involves spatial hash queries, food-finding raycasts, separation force calculations, and state machine transitions. Running all 85 creature brains every frame would blow the budget.</p>
+
+  <p>The solution is <strong>decoupled tick rates</strong> combined with <strong>stagger groups</strong>. AI doesn't run every frame  -  it runs on a fixed interval per species, and within each species the population is split into 3 stagger groups that take turns.</p>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-value">60ms</div>
+      <div class="stat-label">Fish AI tick (~16 Hz)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">60ms</div>
+      <div class="stat-label">Dolphin AI tick (~16 Hz)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">100ms</div>
+      <div class="stat-label">Manatee AI tick (10 Hz)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">3</div>
+      <div class="stat-label">Stagger groups per species</div>
+    </div>
+  </div>
+
+  <p>With 60 fish split across 3 stagger groups, only 20 fish run their AI brain per tick. At 16 Hz tick rate, that's 20 brains processed roughly every 60ms  -  not 60 brains every 16ms. The motion system (velocity, heading, swim animation) still runs every frame for smooth visuals; only the expensive decision-making is throttled.</p>
+
+  <h3>Camera Scout Budget</h3>
+
+  <p>The cinematic camera's Ecosystem Scout  -  which scans creatures to find interesting subjects  -  also runs on a frame budget. It evaluates at most 20 creatures per frame in a round-robin sweep, ensuring that even with hundreds of entities, the scout never spikes a frame.</p>
+
+  <!-- ── Zero-Allocation Loops ── -->
+  <h2 id="memory">Zero-Allocation Loops</h2>
+
+  <p>JavaScript's garbage collector is the enemy of smooth frame rates. A single frame that allocates objects, arrays, or strings can trigger a GC pause that drops the frame. PolyFish achieves <strong>zero heap allocations per frame</strong> during steady-state simulation.</p>
+
+  <p>Every typed array, temporary vector, and result buffer is pre-allocated at startup. Verlet chains use <code>Float32Array</code> scratch buffers for impulse propagation. Spatial hash queries write into pre-allocated result arrays. Instancing sync uses shared <code>Matrix4</code> and <code>Quaternion</code> temps. The VFX particle system uses a custom batched implementation (VFXManager.js) that stores all 1024 particles' positions, velocities, lifetimes, and colors in flat typed arrays, updated in-place every frame. It renders as a single THREE.Points draw call and supports 7 lifecycle event effects with per-particle forces.</p>
+
+  <pre><code><span class="comment">// Pre-allocated temps  - reused every frame, never re-created</span>
+<span class="keyword">const</span> _instanceMatrix = <span class="keyword">new</span> THREE.Matrix4();
+<span class="keyword">const</span> _instanceQuat   = <span class="keyword">new</span> THREE.Quaternion();
+<span class="keyword">const</span> _instanceScale  = <span class="keyword">new</span> THREE.Vector3();
+<span class="keyword">const</span> _instanceEuler  = <span class="keyword">new</span> THREE.Euler();
+
+<span class="comment">// Verlet impulse scratch buffers  - Float32Array, allocated once</span>
+<span class="keyword">this</span>._tempX = <span class="keyword">new</span> Float32Array(nodeCount);
+<span class="keyword">this</span>._tempY = <span class="keyword">new</span> Float32Array(nodeCount);
+<span class="keyword">this</span>._tempZ = <span class="keyword">new</span> Float32Array(nodeCount);</code></pre>
+
+  <!-- ── VR Scaling ── -->
+  <h2 id="vr">VR Scaling</h2>
+
+  <p>WebXR adds unique constraints. The browser renders two eye views per frame (effectively doubling fill rate), and dropped frames cause motion sickness, not just visual jank. PolyFish automatically adjusts rendering quality when running in VR.</p>
+
+  <p>VR-capable devices are explicitly treated as desktop-class, keeping the full 2048 x 2048 shadow map even on standalone headsets like Quest 3. Mobile phones without VR get the reduced 1024 x 1024 shadow map. The water surface shader conditionally skips wave animation on lower-end GPUs. Rendering tick rates may be adjusted per-species to balance visual smoothness with frame rate stability. All of these decisions are made once at startup based on the active session type, not per-frame.</p>
+
+  <div class="comparison">
+    <div>
+      <h4>Desktop Configuration</h4>
+      <p>60 fish, 15 dolphins, 10 manatees, 60 plants. 2048 x 2048 shadow map. Full water shader. ~200 active entities.</p>
+    </div>
+    <div>
+      <h4>VR Configuration</h4>
+      <p>Same creature populations and shadow map as desktop (2048 x 2048). VR headsets are treated as desktop-class to maintain visual fidelity. Rendering quality optimized for headset stability.</p>
+    </div>
+  </div>
+
+  <p>The result: a consistent 72-90fps in VR (depending on headset refresh rate) with the same ecosystem simulation running, delivering a visually convincing experience while maintaining frame rate stability.</p>
+
+  <!-- ── Page Nav ── -->
+  <div class="page-nav">
+    <a href="audio.html">
+      <span class="nav-dir">&larr; Previous</span>
+      <span class="nav-title">Audio &amp; Narration</span>
+    </a>
+    <a href="/">
+      <span class="nav-dir">▶ Play</span>
+      <span class="nav-title">PolyFish</span>
+    </a>
+  </div>
+
+</article>
+
+<footer>
+  <a href="/" class="footer-play">Play PolyFish</a><br>
+  &copy; 2026 The Department of Silly Stuff, LLC
+</footer>
+
+<!-- Three.js library for swim-editor demo -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script type="module">
+  import { init as initSpatialHash } from './demos/spatial-hash.js';
+  import { init as initSwimEditor } from './demos/swim-editor.js';
+  import { init as initInstancing } from './demos/instancing-comparison.js';
+
+  window.addEventListener('load', () => {
+    // Initialize demos
+    const spatialHashContainer = document.getElementById('demo-spatial-hash-container');
+    if (spatialHashContainer) initSpatialHash(spatialHashContainer);
+
+    const swimEditorContainer = document.getElementById('swim-editor-container');
+    if (swimEditorContainer) initSwimEditor(swimEditorContainer);
+
+    const instancingContainer = document.getElementById('demo-instancing-container');
+    if (instancingContainer) initInstancing(instancingContainer);
+  });
+</script>
+
+<script>
+// Placeholder for original inline code - removed to use modules instead
+/*
+class SpatialHashDemo {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.setupCanvas();
+
+    this.cellSize = 5;
+    this.queryRadius = 3;
+    this.creatures = [];
+    this.draggedCreature = null;
+
+    this.initCreatures(20);
+    this.animate();
+    this.setupControls();
+    this.setupMouse();
+  }
+
+  setupCanvas() {
+    const rect = this.canvas.getBoundingClientRect();
+    this.canvas.width = rect.width * window.devicePixelRatio;
+    this.canvas.height = rect.height * window.devicePixelRatio;
+    this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    this.width = rect.width;
+    this.height = rect.height;
+  }
+
+  initCreatures(count) {
+    this.creatures = [];
+    for (let i = 0; i < count; i++) {
+      this.creatures.push({
+        x: Math.random() * (this.width - 40) + 20,
+        y: Math.random() * (this.height - 40) + 20,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2,
+        color: `hsl(${Math.random() * 360}, 70%, 50%)`
+      });
+    }
+  }
+
+  spatialHash(x, y) {
+    const cx = Math.floor(x / this.cellSize);
+    const cy = Math.floor(y / this.cellSize);
+    return (cx * 73856093) ^ (cy * 19349663);
+  }
+
+  getCellCoords(x, y) {
+    return {
+      cx: Math.floor(x / this.cellSize),
+      cy: Math.floor(y / this.cellSize)
+    };
+  }
+
+  getNearbyCreatures(x, y) {
+    const coords = this.getCellCoords(x, y);
+    const nearby = [];
+    for (let dx = -this.queryRadius; dx <= this.queryRadius; dx++) {
+      for (let dy = -this.queryRadius; dy <= this.queryRadius; dy++) {
+        const hash = (((coords.cx + dx) * 73856093) ^ ((coords.cy + dy) * 19349663));
+        for (let c of this.creatures) {
+          const cc = this.getCellCoords(c.x, c.y);
+          if (((cc.cx * 73856093) ^ (cc.cy * 19349663)) === hash) {
+            nearby.push(c);
+          }
+        }
+      }
+    }
+    return nearby;
+  }
+
+  animate() {
+    this.update();
+    this.draw();
+    requestAnimationFrame(() => this.animate());
+  }
+
+  update() {
+    const padding = 20;
+    for (let c of this.creatures) {
+      c.x += c.vx * 0.5;
+      c.y += c.vy * 0.5;
+
+      if (c.x < padding || c.x > this.width - padding) c.vx *= -1;
+      if (c.y < padding || c.y > this.height - padding) c.vy *= -1;
+
+      c.x = Math.max(padding, Math.min(this.width - padding, c.x));
+      c.y = Math.max(padding, Math.min(this.height - padding, c.y));
+    }
+  }
+
+  draw() {
+    this.ctx.fillStyle = '#0a1628';
+    this.ctx.fillRect(0, 0, this.width, this.height);
+
+    // Draw grid
+    this.ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    this.ctx.lineWidth = 0.5;
+    for (let x = 0; x <= this.width; x += this.cellSize * window.devicePixelRatio / window.devicePixelRatio) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(x, 0);
+      this.ctx.lineTo(x, this.height);
+      this.ctx.stroke();
+    }
+    for (let y = 0; y <= this.height; y += this.cellSize * window.devicePixelRatio / window.devicePixelRatio) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, y);
+      this.ctx.lineTo(this.width, y);
+      this.ctx.stroke();
+    }
+
+    // Draw highlighted cells if dragging
+    if (this.draggedCreature) {
+      const coords = this.getCellCoords(this.draggedCreature.x, this.draggedCreature.y);
+
+      // Draw current cell
+      this.ctx.fillStyle = 'rgba(100, 200, 255, 0.15)';
+      this.ctx.fillRect(
+        coords.cx * this.cellSize,
+        coords.cy * this.cellSize,
+        this.cellSize,
+        this.cellSize
+      );
+
+      // Draw query radius cells
+      this.ctx.fillStyle = 'rgba(255, 100, 150, 0.1)';
+      for (let dx = -this.queryRadius; dx <= this.queryRadius; dx++) {
+        for (let dy = -this.queryRadius; dy <= this.queryRadius; dy++) {
+          if (dx === 0 && dy === 0) continue;
+          this.ctx.fillRect(
+            (coords.cx + dx) * this.cellSize,
+            (coords.cy + dy) * this.cellSize,
+            this.cellSize,
+            this.cellSize
+          );
+        }
+      }
+
+      // Draw info
+      this.ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      this.ctx.font = '11px monospace';
+      const hash = this.spatialHash(this.draggedCreature.x, this.draggedCreature.y);
+      this.ctx.fillText(`Cell: (${coords.cx}, ${coords.cy})`, 10, 20);
+      this.ctx.fillText(`Hash: ${hash}`, 10, 35);
+      this.ctx.fillText(`Query Radius: ${this.queryRadius}`, 10, 50);
+    }
+
+    // Draw creatures
+    for (let c of this.creatures) {
+      this.ctx.fillStyle = c === this.draggedCreature ? '#ffff00' : c.color;
+      this.ctx.beginPath();
+      this.ctx.arc(c.x, c.y, 5, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+  }
+
+  setupMouse() {
+    this.canvas.addEventListener('mousedown', (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      for (let c of this.creatures) {
+        if (Math.hypot(c.x - x, c.y - y) < 10) {
+          this.draggedCreature = c;
+          break;
+        }
+      }
+    });
+
+    this.canvas.addEventListener('mousemove', (e) => {
+      if (this.draggedCreature) {
+        const rect = this.canvas.getBoundingClientRect();
+        this.draggedCreature.x = e.clientX - rect.left;
+        this.draggedCreature.y = e.clientY - rect.top;
+      }
+    });
+
+    this.canvas.addEventListener('mouseup', () => {
+      this.draggedCreature = null;
+    });
+
+    this.canvas.addEventListener('mouseleave', () => {
+      this.draggedCreature = null;
+    });
+  }
+
+  setupControls() {
+    document.getElementById('ctrl-cell-size').addEventListener('input', (e) => {
+      this.cellSize = parseFloat(e.target.value);
+      document.getElementById('val-cell-size').textContent = this.cellSize;
+      this.updateStats();
+    });
+
+    document.getElementById('ctrl-query-radius').addEventListener('input', (e) => {
+      this.queryRadius = parseFloat(e.target.value);
+      document.getElementById('val-query-radius').textContent = this.queryRadius;
+      this.updateStats();
+    });
+
+    document.getElementById('ctrl-creature-count').addEventListener('input', (e) => {
+      this.initCreatures(parseInt(e.target.value));
+      document.getElementById('val-creature-count').textContent = e.target.value;
+      this.updateStats();
+    });
+
+    document.getElementById('btn-reset-spatial').addEventListener('click', () => {
+      this.initCreatures(parseInt(document.getElementById('ctrl-creature-count').value));
+      this.updateStats();
+    });
+
+    // Initial stats update
+    this.updateStats();
+  }
+
+  updateStats() {
+    const creatureCount = this.creatures.length;
+    const gridWidth = Math.ceil(this.width / this.cellSize);
+    const gridHeight = Math.ceil(this.height / this.cellSize);
+    const totalCells = gridWidth * gridHeight;
+
+    // Calculate cells checked in a radius query
+    const cellsChecked = Math.pow(2 * this.queryRadius + 1, 2);
+
+    // Average creatures per cell
+    const avgCreaturesPerCell = creatureCount / totalCells;
+
+    // Brute force: O(n²) - check every creature against every other
+    const bruteForceTime = creatureCount * creatureCount * 0.001;
+
+    // Spatial hash: check only nearby creatures
+    const spatialHashTime = cellsChecked * avgCreaturesPerCell * 0.001;
+
+    // Speedup factor
+    const speedup = bruteForceTime > 0 ? bruteForceTime / spatialHashTime : 1;
+
+    // Format the stats string
+    const statsEl = document.getElementById('spatial-hash-stats');
+    statsEl.textContent = `Cells checked: ${cellsChecked} | Avg/cell: ${avgCreaturesPerCell.toFixed(1)} | Simulated: ${spatialHashTime.toFixed(2)}ms vs brute force: ${bruteForceTime.toFixed(2)}ms (${speedup.toFixed(0)}× faster)`;
+  }
+}
+
+// ── DEMO 2: Instancing Comparison ─────────────────────────────
+
+class InstancingComparison {
+  constructor(canvasId) {
+    this.canvas = document.getElementById(canvasId);
+    this.ctx = this.canvas.getContext('2d');
+    this.width = this.canvas.offsetWidth;
+    this.height = this.canvas.offsetHeight;
+    this.canvas.width = this.width * (window.devicePixelRatio || 1);
+    this.canvas.height = this.height * (window.devicePixelRatio || 1);
+    this.ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+
+    this.creatureCount = 60;
+    this.colors = [];
+    this.positions = [];
+    this.generateCreatures();
+
+    this.animate();
+  }
+
+  generateCreatures() {
+    this.colors = [];
+    this.positions = [];
+    // Generate positions centered within a narrower column
+    const columnWidth = this.width * 0.3;  // narrower column
+    const columnHeight = this.height * 0.6;
+    const columnStartX = (this.width * 0.5 - columnWidth) / 2;  // centered within left half
+    const columnStartY = (this.height - columnHeight) / 2;
+
+    for (let i = 0; i < this.creatureCount; i++) {
+      this.colors.push(`hsl(${Math.random() * 360}, 70%, 50%)`);
+      this.positions.push({
+        x: Math.random() * columnWidth + columnStartX,
+        y: Math.random() * columnHeight + columnStartY
+      });
+    }
+  }
+
+  drawHalf(startX, isInstanced) {
+    // Draw half background
+    this.ctx.fillStyle = '#0f1419';
+    this.ctx.fillRect(startX, 0, this.width * 0.5, this.height);
+
+    // Draw subtle border around content area
+    this.ctx.strokeStyle = 'rgba(255, 153, 51, 0.1)';
+    this.ctx.lineWidth = 1;
+    const padding = 20;
+    this.ctx.strokeRect(startX + padding, padding, this.width * 0.5 - padding * 2, this.height - padding * 2);
+
+    // Draw creatures
+    for (let i = 0; i < this.creatureCount; i++) {
+      const pos = this.positions[i];
+      this.ctx.fillStyle = this.colors[i];
+      this.ctx.beginPath();
+      this.ctx.arc(startX + pos.x, pos.y, 5, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+
+    // Draw section label (top left)
+    this.ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    this.ctx.font = '11px ' + 'var(--font-mono, monospace)';
+    this.ctx.textAlign = 'left';
+    this.ctx.fillText(isInstanced ? 'INSTANCEDMESH' : 'INDIVIDUAL MESHES', startX + padding, padding + 15);
+
+    // Draw draw call count (bottom)
+    const drawCallText = isInstanced ? '1 draw call' : this.creatureCount + ' draw calls';
+    this.ctx.font = 'bold 16px ' + 'var(--font-mono, monospace)';
+    const metrics = this.ctx.measureText(drawCallText);
+    const textWidth = metrics.width;
+    const textX = startX + (this.width * 0.5 - textWidth) / 2;
+    const textY = this.height - 30;
+
+    // Background for draw call count
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    this.ctx.fillRect(textX - 8, textY - 18, textWidth + 16, 24);
+
+    // Draw call text in accent color
+    this.ctx.fillStyle = '#f93';
+    this.ctx.fillText(drawCallText, textX, textY);
+  }
+
+  animate = () => {
+    // Clear background
+    this.ctx.fillStyle = '#0a1628';
+    this.ctx.fillRect(0, 0, this.width, this.height);
+
+    // Draw left half (individual meshes)
+    this.drawHalf(0, false);
+
+    // Draw right half (instanced)
+    this.drawHalf(this.width * 0.5, true);
+
+    // Draw vertical separator line in the middle
+    this.ctx.strokeStyle = 'rgba(255, 153, 51, 0.2)';
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    this.ctx.moveTo(this.width * 0.5, 0);
+    this.ctx.lineTo(this.width * 0.5, this.height);
+    this.ctx.stroke();
+
+    // Draw comparison label and reduction percentage at very top
+    const reduction = Math.round((1 - 1 / this.creatureCount) * 100);
+    this.ctx.fillStyle = '#f93';
+    this.ctx.font = 'bold 12px ' + 'var(--font-mono, monospace)';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(`${reduction}% reduction in draw calls`, this.width * 0.5, 18);
+
+    requestAnimationFrame(this.animate);
+  }
+}
+
+// ── Demo 3: Swim Animation Editor (vertex displacement) ──
+(function() {
+  const viewport = document.getElementById('swim-editor-viewport');
+  if (!viewport) return;
+
+  // ── Three.js Scene ──
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a1628);
+  scene.fog = new THREE.Fog(0x0a1628, 15, 40);
+
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  viewport.appendChild(renderer.domElement);
+
+  // OrbitControls (user can also orbit manually)
+  const orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
+  orbitControls.enableDamping = true;
+  orbitControls.dampingFactor = 0.05;
+
+  // Lighting
+  scene.add(new THREE.AmbientLight(0x233943, 2.5));
+  const sun = new THREE.DirectionalLight(0xaaccff, 2.5);
+  sun.position.set(50, 100, 50);
+  scene.add(sun);
+  scene.add(new THREE.HemisphereLight(0x3366aa, 0x443320, 0.6));
+
+  // Grid and Axis helpers
+  const gridHelper = new THREE.GridHelper(4, 20, 0x1a2a40, 0x111e30);
+  scene.add(gridHelper);
+  const axesHelper = new THREE.AxesHelper(1.2);
+  scene.add(axesHelper);
+
+  // ── State ──
+  const gltfLoader = new THREE.GLTFLoader();
+  let currentModel = null;
+  let swimMeshes = [];
+  let orbitRadius = 2.5;
+  const lookTarget = new THREE.Vector3(0, 0, 0);
+  let phase = 0;
+  let lastTime = Date.now() * 0.001;
+  let autoOrbitAngle = 0;
+  let autoOrbitEnabled = false;
+  let currentCreatureType = 'fish';
+  let waveLine = null; // 3D wave visualization
+  // World-space bounds for wave visualization
+  let modelBounds = { min: new THREE.Vector3(), max: new THREE.Vector3(), localZMin: 0, localZRange: 1, bodyAxis: 2 };
+
+  // Species configs matching the game's SwimMaterial.js (idle state)
+  // amplitude is the raw game value used directly in vertex displacement
+  const SWIM_CONFIGS = {
+    fish:    { frequency: 1.5, amplitude: 0.014, speed: 5.34, maskStart: 0.4, maskFloor: 0.15, headPhase: 0.5, swimAxis: 0 },
+    dolphin: { frequency: 1.2, amplitude: 0.010, speed: 4.0,  maskStart: 0.25, maskFloor: 0.1, headPhase: 0.4, swimAxis: 1 },
+    manatee: { frequency: 1.0, amplitude: 0.010, speed: 3.0,  maskStart: 0.3, maskFloor: 0.1, headPhase: 0.3, swimAxis: 1 },
+  };
+
+  // ── Resize ──
+  function resize() {
+    const w = viewport.clientWidth;
+    const h = viewport.clientHeight;
+    if (w === 0 || h === 0) return;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // ── Model Loading ──
+  function loadModel(creatureType) {
+    if (currentModel) {
+      scene.remove(currentModel);
+      currentModel.traverse(c => {
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) {
+          if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
+          else c.material.dispose();
+        }
+      });
+    }
+    swimMeshes = [];
+    phase = 0;
+
+    const modelPath = creatureType + '_rigged.glb';
+    const tryPaths = ['/models/' + modelPath, '../assets/models/' + modelPath, '/assets/models/' + modelPath];
+
+    function tryLoad(idx) {
+      if (idx >= tryPaths.length) {
+        console.error('Failed to load model: ' + creatureType);
+        return;
+      }
+      gltfLoader.load(tryPaths[idx], (gltf) => {
+        const model = gltf.scene;
+
+        // Fix orientation
+        model.rotation.x = -Math.PI / 2;
+        scene.add(model);
+
+        model.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const desiredSize = 1.8;
+        const s = desiredSize / maxDim;
+        model.scale.setScalar(s);
+
+        model.updateMatrixWorld(true);
+        const box2 = new THREE.Box3().setFromObject(model);
+        const center2 = new THREE.Vector3();
+        box2.getCenter(center2);
+        model.position.sub(center2);
+        lookTarget.set(0, 0, 0);
+
+        orbitRadius = desiredSize * 1.6;
+        // Position camera for a nice 3/4 view
+        camera.position.set(orbitRadius * 0.9, orbitRadius * 0.4, orbitRadius * 1.2);
+        orbitControls.target.copy(lookTarget);
+
+        // Apply materials and gather vertex data for displacement
+        model.traverse((child) => {
+          if (child.isMesh && child.material) {
+            const geo = child.geometry;
+            const hasVC = geo.attributes.color != null;
+
+            child.material = new THREE.MeshStandardMaterial({
+              vertexColors: hasVC,
+              flatShading: true,
+              roughness: 0.85,
+              metalness: 0.05,
+              envMapIntensity: 1.2,
+              side: THREE.DoubleSide,
+              color: hasVC ? 0xffffff : child.material.color
+            });
+
+            const posAttr = geo.attributes.position;
+            const origPositions = new Float32Array(posAttr.array.length);
+            origPositions.set(posAttr.array);
+
+            geo.computeBoundingBox();
+            const bb = geo.boundingBox;
+            const zMin = bb.min.z;
+            const zRange = (bb.max.z - bb.min.z) || 1;
+
+            swimMeshes.push({ mesh: child, posAttr, origPositions, zMin, zRange });
+          }
+        });
+
+        currentModel = model;
+
+        // Cache bounds for wave visualization
+        model.updateMatrixWorld(true);
+        const wBox = new THREE.Box3().setFromObject(model);
+        modelBounds.min.copy(wBox.min);
+        modelBounds.max.copy(wBox.max);
+        // Detect which world axis is longest (head-to-tail)
+        const sizes = new THREE.Vector3();
+        wBox.getSize(sizes);
+        if (sizes.x >= sizes.y && sizes.x >= sizes.z) modelBounds.bodyAxis = 0;
+        else if (sizes.y >= sizes.z) modelBounds.bodyAxis = 1;
+        else modelBounds.bodyAxis = 2;
+        // Store local geometry Z range from first swim mesh
+        if (swimMeshes.length > 0) {
+          modelBounds.localZMin = swimMeshes[0].zMin;
+          modelBounds.localZRange = swimMeshes[0].zRange;
+        }
+
+        // Build the wave line
+        buildWaveLine();
+      }, undefined, () => {
+        tryLoad(idx + 1);
+      });
+    }
+    tryLoad(0);
+  }
+
+  // ── Wave Visualization Line ──
+  const WAVE_SEGMENTS = 80;
+  const WAVE_OVERSHOOT = 0; // stop exactly at tail
+
+  function buildWaveLine() {
+    // Remove old wave line
+    if (waveLine) {
+      scene.remove(waveLine);
+      waveLine.geometry.dispose();
+      waveLine.material.dispose();
+      waveLine = null;
+    }
+
+    // Create a TubeGeometry from a curve - we'll update the curve each frame
+    // Start with a straight line, animate it in the loop
+    const points = [];
+    for (let i = 0; i <= WAVE_SEGMENTS; i++) {
+      points.push(new THREE.Vector3(0, 0, 0));
+    }
+    const curve = new THREE.CatmullRomCurve3(points);
+    const tubeGeo = new THREE.TubeGeometry(curve, WAVE_SEGMENTS, 0.018, 6, false);
+    const tubeMat = new THREE.MeshBasicMaterial({
+      color: 0x4fc3f7,
+      transparent: true,
+      opacity: 0.85,
+      depthTest: false,
+      depthWrite: false,
+    });
+    waveLine = new THREE.Mesh(tubeGeo, tubeMat);
+    waveLine.renderOrder = 999;
+    waveLine.frustumCulled = false;
+    scene.add(waveLine);
+  }
+
+  function updateWaveLine(freq, liveAmplitude, speed, mask, headPhase, spec) {
+    if (!waveLine || swimMeshes.length === 0) return;
+
+    // Body axis = longest world-space axis (head-to-tail)
+    const ba = modelBounds.bodyAxis; // 0=X, 1=Y, 2=Z
+    const baMin = ba === 0 ? modelBounds.min.x : ba === 1 ? modelBounds.min.y : modelBounds.min.z;
+    const baMax = ba === 0 ? modelBounds.max.x : ba === 1 ? modelBounds.max.y : modelBounds.max.z;
+    const baRange = baMax - baMin;
+    if (baRange < 0.001) return;
+
+    const localZRange = modelBounds.localZRange;
+
+    // Displacement axis: perpendicular to body axis
+    // Fish (swimAxis=0): lateral on X; Dolphin/Manatee (swimAxis=1): vertical on Y
+    let dispAxis = spec.swimAxis < 0.5 ? 0 : 1;
+    if (dispAxis === ba) dispAxis = (ba + 1) % 3;
+
+    const points = [];
+    const totalLen = baRange * (1 + WAVE_OVERSHOOT);
+    for (let i = 0; i <= WAVE_SEGMENTS; i++) {
+      const t = i / WAVE_SEGMENTS;
+      // Walk from head (baMax) to past tail
+      const bodyPos = baMax - t * totalLen;
+
+      // body: 0 at head, 1 at tail
+      const body = Math.max(0, Math.min(1, (baMax - bodyPos) / baRange));
+      const waveBody = Math.max(body, mask);
+
+      const rampRaw = (body - mask) / 0.3;
+      const ramp = Math.max(0, Math.min(1, rampRaw));
+      const amp = ramp;
+
+      const headDelay = (1.0 - ramp) * headPhase;
+      const wavePhase = waveBody * freq * 6.2832 - phase + headDelay;
+      const wave = Math.sin(wavePhase) * liveAmplitude * amp;
+
+      // Scale to world and exaggerate for visibility
+      const scaleFactor = baRange / (localZRange > 0.001 ? localZRange : 1);
+      const visWave = wave * scaleFactor * 1.5;
+
+      const pt = new THREE.Vector3(0, 0, 0);
+      if (ba === 0) pt.x = bodyPos; else if (ba === 1) pt.y = bodyPos; else pt.z = bodyPos;
+      if (dispAxis === 0) pt.x += visWave; else if (dispAxis === 1) pt.y += visWave; else pt.z += visWave;
+
+      points.push(pt);
+    }
+
+    const curve = new THREE.CatmullRomCurve3(points);
+    const newGeo = new THREE.TubeGeometry(curve, WAVE_SEGMENTS, 0.018, 6, false);
+    waveLine.geometry.dispose();
+    waveLine.geometry = newGeo;
+  }
+
+  // ── Read slider values ──
+  function getFreq() { return parseFloat(document.getElementById('swim-freq').value); }
+  function getAmp() { return parseFloat(document.getElementById('swim-amp').value); }
+  function getSpeed() { return parseFloat(document.getElementById('swim-speed').value); }
+  function getMask() { return parseFloat(document.getElementById('swim-mask').value); }
+  function getHeadPhase() { return parseFloat(document.getElementById('swim-headphase').value); }
+
+  // ── Set slider + display values ──
+  function setSlider(id, val) {
+    document.getElementById(id).value = val;
+    const decimals = id === 'swim-amp' ? 3 : 2;
+    document.getElementById(id + '-val').textContent = parseFloat(val).toFixed(decimals);
+  }
+
+  // ── Apply preset ──
+  function applyPreset(species) {
+    const cfg = SWIM_CONFIGS[species];
+    setSlider('swim-freq', cfg.frequency);
+    setSlider('swim-amp', cfg.amplitude);
+    setSlider('swim-speed', cfg.speed);
+    setSlider('swim-mask', cfg.maskStart);
+    setSlider('swim-headphase', cfg.headPhase);
+    // Also switch model
+    document.getElementById('swim-model-select').value = species;
+    if (currentCreatureType !== species) {
+      currentCreatureType = species;
+      loadModel(species);
+    }
+  }
+
+  // ── Animation Loop (vertex displacement) ──
+  function animate() {
+    requestAnimationFrame(animate);
+    const now = Date.now() * 0.001;
+    const dt = Math.min(now - lastTime, 0.05);
+    lastTime = now;
+
+    const freq = getFreq();
+    const liveAmplitude = getAmp();
+    const speed = getSpeed();
+    const mask = getMask();
+    const headPhase = getHeadPhase();
+    const mode = document.getElementById('swim-model-select').value;
+
+    // Switch model if species changed via dropdown
+    if (mode !== currentCreatureType) {
+      currentCreatureType = mode;
+      loadModel(mode);
+    }
+
+    const spec = SWIM_CONFIGS[mode];
+
+    // Accumulate phase like the game does (speed * dt)
+    phase += speed * dt;
+
+    // Auto orbit camera
+    if (autoOrbitEnabled) {
+      autoOrbitAngle += 0.004;
+      camera.position.x = Math.sin(autoOrbitAngle) * orbitRadius;
+      camera.position.z = Math.cos(autoOrbitAngle) * orbitRadius;
+      camera.position.y = orbitRadius * 0.35;
+      camera.lookAt(lookTarget);
+      orbitControls.target.copy(lookTarget);
+      orbitControls.update();
+    } else {
+      orbitControls.update();
+    }
+
+    // ── Vertex displacement (matches createCreatureViewer logic exactly) ──
+    const dispIdx = spec.swimAxis < 0.5 ? 0 : 1;
+    for (let m = 0; m < swimMeshes.length; m++) {
+      const sm = swimMeshes[m];
+      const arr = sm.posAttr.array;
+      const orig = sm.origPositions;
+
+      for (let i = 0; i < sm.posAttr.count; i++) {
+        const ix = i * 3;
+        const z = orig[ix + 2];
+        const bodyRange = sm.zRange;
+
+        // Body coordinate: 0 = head, 1 = tail (inverted, matches game)
+        const body = bodyRange > 0.001
+          ? Math.max(0, Math.min(1, 1.0 - (z - sm.zMin) / bodyRange))
+          : 0.5;
+
+        // Head region samples wave at maskStart (rigid head)
+        const waveBody = Math.max(body, mask);
+
+        // Amplitude ramp with head weighting
+        const rampRaw = (body - mask) / 0.3;
+        const ramp = Math.max(0, Math.min(1, rampRaw));
+
+        // Eye lateral weight
+        const lateralIdx = spec.swimAxis < 0.5 ? 1 : 0;
+        const lateralOffset = Math.abs(orig[ix + lateralIdx]) / (bodyRange * 0.5 + 0.001);
+        const eyeWeight = Math.max(0, Math.min(1, lateralOffset * 3.0));
+        const headAmp = spec.maskFloor * eyeWeight;
+        const amp = headAmp + (1.0 - headAmp) * ramp;
+
+        // Phase: spatial from body, temporal from accumulated phase
+        const headDelay = (1.0 - ramp) * headPhase;
+        const wavePhase = waveBody * freq * 6.2832 - phase + headDelay;
+        const wave = Math.sin(wavePhase) * liveAmplitude * amp;
+
+        // Write displaced position
+        arr[ix]     = orig[ix];
+        arr[ix + 1] = orig[ix + 1];
+        arr[ix + 2] = orig[ix + 2];
+        arr[ix + dispIdx] += wave;
+      }
+      sm.posAttr.needsUpdate = true;
+    }
+
+    // Update wave visualization line
+    updateWaveLine(freq, liveAmplitude, speed, mask, headPhase, spec);
+
+    renderer.render(scene, camera);
+  }
+
+  // ── UI Event Handlers ──
+  document.getElementById('swim-model-select').addEventListener('change', (e) => {
+    const species = e.target.value;
+    if (species !== currentCreatureType) {
+      currentCreatureType = species;
+      loadModel(species);
+      // Apply matching defaults
+      const cfg = SWIM_CONFIGS[species];
+      setSlider('swim-freq', cfg.frequency);
+      setSlider('swim-amp', cfg.amplitude);
+      setSlider('swim-speed', cfg.speed);
+      setSlider('swim-mask', cfg.maskStart);
+      setSlider('swim-headphase', cfg.headPhase);
+    }
+  });
+
+  // Slider value displays
+  ['swim-freq', 'swim-amp', 'swim-speed', 'swim-mask', 'swim-headphase'].forEach(id => {
+    document.getElementById(id).addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      // Amplitude needs 3 decimals since values are tiny (0.014)
+      const decimals = id === 'swim-amp' ? 3 : 2;
+      document.getElementById(id + '-val').textContent = val.toFixed(decimals);
+    });
+  });
+
+  // Presets
+  document.getElementById('swim-preset-fish').addEventListener('click', () => applyPreset('fish'));
+  document.getElementById('swim-preset-dolphin').addEventListener('click', () => applyPreset('dolphin'));
+  document.getElementById('swim-preset-manatee').addEventListener('click', () => applyPreset('manatee'));
+
+  // Display toggles
+  document.getElementById('swim-toggle-wireframe').addEventListener('click', () => {
+    if (!currentModel) return;
+    currentModel.traverse(c => {
+      if (c.isMesh && c.material) c.material.wireframe = !c.material.wireframe;
+    });
+  });
+
+  document.getElementById('swim-toggle-orbit').addEventListener('click', () => {
+    autoOrbitEnabled = !autoOrbitEnabled;
+    document.getElementById('swim-toggle-orbit').textContent = autoOrbitEnabled ? 'Pause Orbit' : 'Auto Orbit';
+  });
+
+  // ── Init ──
+  loadModel('fish');
+  animate();
+})();
+
+*/
+</script>
+
+</body>
+</html>

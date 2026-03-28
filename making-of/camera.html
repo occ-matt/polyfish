@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cinematic Camera  -  Making of PolyFish</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">Making of <span>PolyFish</span></a>
+    <a href="/" class="nav-play-mobile">&#9654; Play PolyFish</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+    </button>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="origins.html">Origins</a>
+      <a href="ai.html">AI Collab</a>
+      <a href="creatures.html">Creatures</a>
+      <a href="ecosystem.html">Ecosystem</a>
+      <a href="kelp.html">Kelp</a>
+      <a href="rendering.html">Rendering</a>
+      <a href="camera.html" class="active">Camera</a>
+      <a href="audio.html">Audio</a>
+      <a href="performance.html">Performance</a>
+      <a href="demos.html">Demos</a>
+      <a href="/" class="nav-play">Play PolyFish</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-header">
+  <div class="breadcrumb">Chapter 06</div>
+  <h1 class="page-title">Cinematic Camera</h1>
+  <p class="page-subtitle">Automating documentary-style underwater cinematography. How a three-layer architecture builds narrative through intelligent shot selection, smooth framing, and behavior-driven editing.</p>
+</header>
+
+<article>
+
+  <div class="toc">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#the-problem">The Problem</a></li>
+      <li><a href="#three-layer-architecture">Three-Layer Architecture</a></li>
+      <li><a href="#ten-shot-types">The Eleven Shot Types</a></li>
+      <li><a href="#narrative-phases">Narrative Phases &amp; Pacing</a></li>
+      <li><a href="#camera-smoothing">Camera Smoothing &amp; Damping</a></li>
+      <li><a href="#depth-of-field">Depth of Field &amp; Focus</a></li>
+    </ol>
+  </div>
+
+  <!-- ────────── Section: The Problem ────────── -->
+  <h2 id="the-problem">The Problem</h2>
+
+  <p>In a traditional game camera follows a rule: aim at the player, or orbit them in a controlled way. In PolyFish, there is no player. There are only creatures  -  fish, dolphins, manatees  -  living their lives. The camera must become a nature documentary director, following action that <em>you don't control</em>, choosing shots that tell a story, and responding to unscripted behavior in real time.</p>
+
+  <p>You can't predetermine every camera cut. The creatures' behavior is emergent and AI-driven. A dolphin might hunt. A school of fish might scatter in panic. A manatee might drift lazily through kelp. The system must watch, recognize the drama, and frame it beautifully  -  all without human intervention.</p>
+
+  <div class="callout">
+    <p><strong>The Core Challenge:</strong> How do you write a camera system that feels like it was choreographed by a cinematographer, when the cast's dialogue is pure chaos?</p>
+  </div>
+
+  <!-- ────────── Section: Three-Layer Architecture ────────── -->
+  <h2 id="three-layer-architecture">Three-Layer Architecture</h2>
+
+  <p>The cinematic camera system is built on three independent, communicating layers:</p>
+
+  <h3>Layer 1: DocumentaryDirector (Editorial Brain)</h3>
+
+  <p>The director decides <em>what</em> shot to take and <em>when</em>. It runs a narrative state machine with five phases (ESTABLISHING, INTRODUCE, DEVELOP, CLIMAX, RESOLVE), each with a weighted pool of shot types. The director samples from the pools, respects phase transitions, and modulates duration variance (±20%) to keep pacing alive. It asks the Cinematographer for technical help, but stays in control of the narrative.</p>
+
+  <div class="demo-container" id="demo-director-flow-container"></div>
+
+  <h3>Layer 2: Cinematographer (Camera Operator)</h3>
+
+  <p>The cinematographer handles the <em>mechanics</em> of framing a shot. Given a target creature and a shot type, it computes the exact camera position, look-at point, and field of view. It applies smoothing, velocity damping to prevent jitter, and direction continuity to avoid 180° flips. It respects the physical constraints of the scene  -  never clipping the seafloor, never going outside world bounds  -  and adjusts framing in real time as the subject moves.</p>
+
+  <div class="demo-container" id="demo-cinematographer-flow-container"></div>
+
+  <h3>Layer 3: EcosystemScout (Behavior Detector)</h3>
+
+  <p>The scout watches all creatures and detects interesting moments: feeding, reproduction, predation, escape fleeing, clustering, and idle behavior. It tags each creature with a <strong>narrative interest score</strong> that reflects whether something dramatic is happening nearby. The director uses this to decide which creature to focus on. If a predator is hunting, that's a 10/10. If a fish is just grazing, that's a 2/10.</p>
+
+  <div class="demo-container" id="demo-scout-scores-container"></div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">3</div>
+      <div class="stat-label">Layers</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">5</div>
+      <div class="stat-label">Narrative phases</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">11</div>
+      <div class="stat-label">Shot types</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">±20%</div>
+      <div class="stat-label">Duration variance</div>
+    </div>
+  </div>
+
+  <!-- ────────── Section: Shot Types ────────── -->
+  <h2 id="ten-shot-types">The Eleven Shot Types</h2>
+
+  <p>Each shot type has a distinct geometry: a specific distance from the subject, an angle of approach, and a framing rule. The cinematographer computes all positions in world space, then applies temporal damping so cuts don't feel jarring.</p>
+
+  <h3>1. ESTABLISHING_WIDE</h3>
+  <p>High orbit, looking down at 45°. The camera is far back (5–7× subject size) and elevated 30° above the subject. Used at the start of a scene to show the broader environment  -  kelp forest, open water, other creatures nearby.</p>
+
+  <h3>2. HERO_PORTRAIT</h3>
+  <p>Classic rule-of-thirds: subject framed in the upper-left third of the screen, filling about 40% of the viewport. Distance is close (1.5–2.5× subject size). The camera orbits perpendicular to the subject's heading for a profile view that shows body shape.</p>
+
+  <h3>3. CHASE_FOLLOW</h3>
+  <p>Quartering angle behind a moving subject. The camera is behind and slightly to one side, so we see the subject's rear 3/4 view as it moves away. Perfect for hunting sequences or fleeing prey. Feels dynamic and kinetic.</p>
+
+  <h3>4. SIDE_TRACK</h3>
+  <p>Parallel tracking shot. The camera moves alongside the subject, maintaining distance and staying perpendicular to motion. Used for swimming sequences where you want to see the creature move across the frame.</p>
+
+  <h3>5. GROUND_HIDE</h3>
+  <p>Static low-angle from the seafloor or a rock outcrop. The camera sits still and watches the creature swim overhead. Used for moments when the camera is "hiding" and observing. Feels observational and naturalistic.</p>
+
+  <h3>6. SNELLS_WINDOW</h3>
+  <p>Looking upward from below toward the surface. Named after Snell's window, the optical phenomenon where you see the refracted sky when looking up through water. The camera is below the subject, looking up at a slight angle. Rare and striking.</p>
+
+  <h3>7. SLOW_REVEAL</h3>
+  <p>Begins with an extreme close-up on a detail (eye, fin, scales), then pulls back over 3–4 seconds to reveal the full creature. Dramatic and intimate. Often used at the start of a new narrative beat.</p>
+
+  <h3>8. FLY_THROUGH</h3>
+  <p>A dolly move that flies the camera between two points (e.g., through a gap in kelp, past a rock formation). The subject is near the path but not directly centered. Creates a sense of exploration and discovery.</p>
+
+  <h3>9. REACTION_CUT</h3>
+  <p>Quick, tight shot of a secondary subject. While the main action happens elsewhere, cut to another creature's reaction  -  a nearby fish flinching, a predator's head snapping up. Builds tension and interconnects the narrative.</p>
+
+  <h3>10. MACRO_DETAIL</h3>
+  <p>Extreme close-up with shallow depth of field. The camera is 20-30cm away from a detail (mouth, fins, eye). Only that detail is in focus; the background is bokeh. Feels intimate and scientific.</p>
+
+  <h3>11. KELP_EDGE</h3>
+  <p>Positioned on the periphery of the kelp forest, low, looking up and inward at roughly 75 degrees. Frames the kelp canopy above with light filtering through  -  a very cinematic environmental shot that grounds the viewer in the habitat.</p>
+
+  <p>Try the interactive demo below to see how each shot type positions the camera relative to a subject in the center of the scene:</p>
+
+  <!-- ── Demo 1: Shot Type Visualizer ── -->
+  <div class="demo-container" id="demo-shot-types-container"></div>
+
+  <!-- ────────── Section: Narrative Phases ────────── -->
+  <h2 id="narrative-phases">Narrative Phases &amp; Pacing</h2>
+
+  <p>A documentary is not just a sequence of random shots. It's a story arc. The camera system drives this through five phases, each with different pacing and shot selection:</p>
+
+  <h3>ESTABLISHING (2-3 shots)</h3>
+  <p>Show the location. The shot pool includes ESTABLISHING_WIDE, SIDE_TRACK, SNELLS_WINDOW, and HERO_PORTRAIT to ensure creatures appear early. Durations are long (12-20 seconds per shot) so the viewer can absorb the space. No dramatic moments yet  -  just environment.</p>
+
+  <h3>INTRODUCE (2-4 shots)</h3>
+  <p>Introduce the main subject. The pool draws from HERO_PORTRAIT, SIDE_TRACK, SLOW_REVEAL, and MACRO_DETAIL. Durations are moderate. The camera gets closer, more interested in the creature's form.</p>
+
+  <h3>DEVELOP (3-5 shots)</h3>
+  <p>The action intensifies. More cuts, tighter framing. SIDE_TRACK is double-weighted in the pool, joined by CHASE_FOLLOW, SLOW_REVEAL, MACRO_DETAIL, and GROUND_HIDE. The camera follows behavior  -  if the creature hunts, stay close. If it flees, chase it.</p>
+
+  <h3>CLIMAX (1-2 shots)</h3>
+  <p>The moment of maximum drama. Kept deliberately short so the system cycles back to contemplation. The pool favors SIDE_TRACK, CHASE_FOLLOW, REACTION_CUT, and MACRO_DETAIL. The camera is almost twitchy  -  cutting on action, on gazes, on movement.</p>
+
+  <h3>RESOLVE (2-3 shots)</h3>
+  <p>The moment passes. Fade back to calm. SIDE_TRACK, SLOW_REVEAL, HERO_PORTRAIT, SNELLS_WINDOW, and ESTABLISHING_WIDE fill the pool. Durations relax. The camera settles, the pace breathes, and then the cycle begins again.</p>
+
+  <div class="callout technical">
+    <p><strong>Duration Variance:</strong> Each shot's base duration is modified by ±20% via a random multiplier (0.8 to 1.2). This prevents the rhythm from feeling mechanical. 2-second shots become 1.6–2.4 seconds. The variance is seeded per-shot so it's deterministic but appears organic.</p>
+  </div>
+
+  <p>In the demo below, click "regenerate" to see a new random narrative timeline. Notice how the phase transitions happen at fixed times, but the shots within each phase are random samples from the phase's weighted pool:</p>
+
+  <!-- ── Demo 2: Narrative Timeline ── -->
+  <div class="demo-container" id="demo-timeline-container"></div>
+
+  <!-- ────────── Section: Camera Smoothing ────────── -->
+  <h2 id="camera-smoothing">Camera Smoothing &amp; Damping</h2>
+
+  <p>If the camera snapped instantly to each new framing, it would feel nauseating  -  constant jarring cuts. Instead, the cinematographer uses <strong>velocity damping</strong> to smooth the transition between shots over 0.5–1.0 seconds.</p>
+
+  <p>The key insight: store the camera's <em>velocity</em> (not just position), and when a new shot is chosen, don't aim the velocity directly at the desired position. Instead, gradually blend the velocity toward the new direction, using a spring damping coefficient (0.1–0.2). This prevents bouncing and overshooting.</p>
+
+  <pre><code><span class="keyword">const</span> <span class="type">cameraDamping</span> = <span class="number">0.15</span>; <span class="comment">// 15% toward target per frame</span>
+<span class="keyword">const</span> toTarget = targetPos.clone()
+  .sub(camera.position).normalize();
+cameraVelocity.lerp(toTarget, cameraDamping);
+camera.position.add(cameraVelocity.multiplyScalar(moveSpeed));</code></pre>
+
+  <p>Additionally, the system enforces <strong>direction continuity</strong>. If the camera is moving left-to-right, and a new shot would require a 180° flip, the system instead orbits the long way around. This avoids the disorienting "jump-cut" feeling where the scene suddenly flips.</p>
+
+  <pre><code><span class="keyword">const</span> currentDir = camera.position
+  .clone().sub(subject.position).normalize();
+<span class="keyword">const</span> desiredDir = desiredCameraPos
+  .clone().sub(subject.position).normalize();
+
+<span class="comment">// If flip would be &gt;90°, orbit the other way</span>
+<span class="keyword">if</span> (currentDir.dot(desiredDir) &lt; <span class="number">0</span>) {
+  desiredCameraPos = subject.position.clone()
+    .add(desiredDir.negate().multiplyScalar(distance));
+}</code></pre>
+
+  <p>Finally, the system applies <strong>orbit angle biasing</strong> based on the subject's heading. If a fish is swimming left, prefer shots from the left side (profile shots). If it's swimming toward the camera, bias toward head-on shots. This keeps framing consistent with the subject's direction of travel.</p>
+
+  <!-- ────────── Section: Depth of Field ────────── -->
+  <h2 id="depth-of-field">Depth of Field &amp; Focus</h2>
+
+  <p>The cinematographer also controls focus. Different shot types demand different apertures:</p>
+
+  <h3>DEEP (f/16)</h3>
+  <p>Everything in sharp focus. Used for ESTABLISHING_WIDE and FLY_THROUGH, where you want to see the entire scene. Aperture is very small.</p>
+
+  <h3>MEDIUM (f/5.6)</h3>
+  <p>Subject sharp, background soft. The default for HERO_PORTRAIT, CHASE_FOLLOW, SIDE_TRACK, and REACTION_CUT. Isolates the creature from clutter.</p>
+
+  <h3>SHALLOW (f/2)</h3>
+  <p>Subject detail sharp, background completely blurred. Used for MACRO_DETAIL and SLOW_REVEAL, where we want extreme focus separation.</p>
+
+  <p>The depth-of-field effect is implemented via a <strong>BokehPass</strong> in the Three.js post-processing pipeline. The focus distance is animated smoothly as the camera moves, so focus tracks the subject naturally without snapping.</p>
+
+  <pre><code><span class="keyword">const</span> dofProfiles = {
+  <span class="string">'DEEP'</span>: { focus: <span class="number">50</span>, aperture: <span class="number">16</span>, bladeCount: <span class="number">0</span> },
+  <span class="string">'MEDIUM'</span>: { focus: <span class="number">15</span>, aperture: <span class="number">5.6</span>, bladeCount: <span class="number">6</span> },
+  <span class="string">'SHALLOW'</span>: { focus: <span class="number">5</span>, aperture: <span class="number">2</span>, bladeCount: <span class="number">8</span> }
+};
+
+<span class="keyword">const</span> profile = dofProfiles[currentShotType];
+bokehPass.uniforms.focus.value = THREE.MathUtils.lerp(
+  bokehPass.uniforms.focus.value,
+  profile.focus,
+  0.1 <span class="comment">// smooth over 10 frames</span>
+);</code></pre>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">0.15</div>
+      <div class="stat-label">Camera damping</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">f/16–f/2</div>
+      <div class="stat-label">DOF aperture range</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">3</div>
+      <div class="stat-label">DOF profiles</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">0.5–1.0s</div>
+      <div class="stat-label">Transition time</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <p><strong>Work in progress.</strong> The cinematic camera is the system Matt is most excited to keep pushing on. The architecture is solid and the shot types work well individually, but the overall pacing and narrative flow still need refinement. Transitions between phases can feel abrupt, subject selection sometimes misses the most interesting action, and the system doesn't yet have a strong sense of dramatic timing. It's close - but "close" in cinematography is the difference between a nature documentary and a surveillance camera. This is where the next round of iteration will focus.</p>
+  </div>
+
+  <!-- ── Page Navigation ── -->
+  <div class="page-nav">
+    <a href="rendering.html">
+      <span class="nav-dir">&larr; Previous</span>
+      <span class="nav-title">Rendering &amp; Shaders</span>
+    </a>
+    <a href="audio.html">
+      <span class="nav-dir">Next &rarr;</span>
+      <span class="nav-title">Audio &amp; Narration</span>
+    </a>
+  </div>
+
+</article>
+
+<footer>
+  <a href="/" class="footer-play">Play PolyFish</a><br>
+  &copy; 2026 The Department of Silly Stuff, LLC
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════════
+     DEMO SCRIPTS
+     ══════════════════════════════════════════════════════════════ -->
+<script type="module">
+// Import demo modules
+import { init as initDirectorFlow } from './demos/camera-director-flow.js';
+import { init as initCinematographerFlow } from './demos/camera-cinematographer-flow.js';
+import { init as initScoutScores } from './demos/camera-scout-scores.js';
+import { init as initShotTypes } from './demos/camera-shot-types.js';
+import { init as initTimeline } from './demos/camera-timeline.js';
+
+// Initialize all demos when page loads
+window.addEventListener('load', () => {
+  initDirectorFlow(document.getElementById('demo-director-flow-container'));
+  initCinematographerFlow(document.getElementById('demo-cinematographer-flow-container'));
+  initScoutScores(document.getElementById('demo-scout-scores-container'));
+  initShotTypes(document.getElementById('demo-shot-types-container'));
+  initTimeline(document.getElementById('demo-timeline-container'));
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Origins & Remaster  -  Making of PolyFish</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* ── Timeline ── */
+    .timeline {
+      position: relative;
+      padding-left: 2.2rem;
+      margin: 2.5rem 0;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 0.55rem;
+      top: 0.4rem;
+      bottom: 0.4rem;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--accent), var(--border) 40%, var(--accent));
+      border-radius: 1px;
+    }
+    .timeline-entry {
+      position: relative;
+      margin-bottom: 2.2rem;
+    }
+    .timeline-entry:last-child {
+      margin-bottom: 0;
+    }
+    .timeline-entry::before {
+      content: '';
+      position: absolute;
+      left: -1.85rem;
+      top: 0.45rem;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(255, 153, 51, 0.4);
+    }
+    .timeline-year {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--accent);
+      letter-spacing: 0.06em;
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+    }
+    .timeline-entry h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--fg);
+      margin-bottom: 0.4rem;
+    }
+    .timeline-entry p {
+      font-size: 0.95rem;
+      color: var(--fg-muted);
+      line-height: 1.65;
+    }
+
+    /* ── Before/After comparison ── */
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+    .comparison-card {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.4rem;
+    }
+    .comparison-card h4 {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.8rem;
+    }
+    .comparison-card.before h4 { color: var(--fg-subtle); }
+    .comparison-card.after h4 { color: var(--accent); }
+    .comparison-card ul {
+      list-style: none;
+      padding: 0;
+    }
+    .comparison-card li {
+      font-size: 0.9rem;
+      color: var(--fg-muted);
+      line-height: 1.6;
+      padding: 0.2rem 0;
+      padding-left: 1.2rem;
+      position: relative;
+    }
+    .comparison-card li::before {
+      content: '›';
+      position: absolute;
+      left: 0;
+      color: var(--fg-subtle);
+    }
+    .comparison-card.after li::before {
+      color: var(--accent);
+    }
+
+    /* ── Image placeholder ── */
+    .image-placeholder {
+      background: var(--bg-alt);
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 3rem 2rem;
+      text-align: center;
+      margin: 2rem 0;
+    }
+    .image-placeholder .ph-icon {
+      font-size: 2rem;
+      margin-bottom: 0.6rem;
+      opacity: 0.4;
+    }
+    .image-placeholder .ph-label {
+      font-size: 0.85rem;
+      color: var(--fg-subtle);
+      font-style: italic;
+    }
+
+    /* ── Pull quote ── */
+    .pull-quote {
+      border-left: 3px solid var(--accent);
+      padding: 1rem 0 1rem 1.5rem;
+      margin: 2rem 0;
+      font-size: 1.1rem;
+      color: var(--fg);
+      font-style: italic;
+      line-height: 1.7;
+    }
+    .pull-quote .attribution {
+      font-style: normal;
+      font-size: 0.85rem;
+      color: var(--fg-subtle);
+      margin-top: 0.5rem;
+    }
+
+    @media (max-width: 600px) {
+      .comparison { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">Making of <span>PolyFish</span></a>
+    <a href="/" class="nav-play-mobile">&#9654; Play PolyFish</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+    </button>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="origins.html" class="active">Origins</a>
+      <a href="ai.html">AI Collab</a>
+      <a href="creatures.html">Creatures</a>
+      <a href="ecosystem.html">Ecosystem</a>
+      <a href="kelp.html">Kelp</a>
+      <a href="rendering.html">Rendering</a>
+      <a href="camera.html">Camera</a>
+      <a href="audio.html">Audio</a>
+      <a href="performance.html">Performance</a>
+      <a href="demos.html">Demos</a>
+      <a href="/" class="nav-play">Play PolyFish</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-header">
+  <div class="breadcrumb">Prologue</div>
+  <h1 class="page-title">Origins &amp; Remaster</h1>
+  <p class="page-subtitle">From a beer fermentation sim to an underwater documentary  - how a VR experiment became a Three.js remaster built with AI.</p>
+</header>
+
+<article>
+
+  <div class="toc">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#fermentation">It Started with Beer</a></li>
+      <li><a href="#ocean">From Yeast to Ocean</a></li>
+      <li><a href="#narration">The Narration</a></li>
+      <li><a href="#why-remaster">Why Remaster?</a></li>
+      <li><a href="#porting">The Port</a></li>
+      <li><a href="#what-changed">What Changed</a></li>
+    </ol>
+  </div>
+
+  <!-- ────────── Section: It Started with Beer ────────── -->
+  <h2 id="fermentation">It Started with Beer</h2>
+
+  <p>PolyFish didn't start as an ocean sim. It started as a visualization of beer fermentation.</p>
+
+  <p>The idea was simple: yeast eat sugar, reproduce, and die. You get a rapid population explosion followed by a sudden die-off once all the food is consumed. It's the same population curve you see in any closed ecosystem - growth, carrying capacity, collapse.</p>
+
+  <!-- ── Live Fermentation Demo ── -->
+  <div class="demo-container">
+    <canvas id="demo-fermentation"></canvas>
+    <div class="demo-label">Fermentation Sim - organisms eat, reproduce, and die</div>
+    <div class="demo-controls">
+      <span id="ferm-stats" style="font-family: var(--font-mono); font-size: 0.72rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.04em;"></span>
+    </div>
+  </div>
+
+  <p>This was in the early days of modern VR development, right after positional tracking arrived. Seeing little geometric representations of yeast moving around, grabbing food, making babies, and dying - in VR, with real depth and presence - was surprisingly powerful. The simple shapes <em>looked alive</em>.</p>
+
+  <div class="callout">
+    <p><strong>The core loop:</strong> Organisms find food &rarr; eat &rarr; gain energy &rarr; reproduce &rarr; food runs out &rarr; die-off. This exact lifecycle still drives PolyFish today, just with fish instead of yeast and an ocean instead of a petri dish.</p>
+  </div>
+
+  <!-- ────────── Section: From Yeast to Ocean ────────── -->
+  <h2 id="ocean">From Yeast to Ocean</h2>
+
+  <p>The fermentation sim reminded Matt of something  - his experiences scuba diving. The swarm behavior, the way organisms cluster around food sources, the ebb and flow of life. It looked like an ocean. And he wanted to build one.</p>
+
+  <p>Beyond the ecosystem, this was a chance to play with <strong>procedural animation</strong>. The technique: apply a sine wave masked by joint influence, with offsets per bone so you get overlapping waves of motion flowing through the body. It's what gives the fish their organic swim cycle  - no keyframe animation, just math that feels alive.</p>
+
+  <p>The original project was built in Unity, hand-coded as a hacky experiment. It never shipped as a product, but it was demoed onstage at an Austin VR meetup in 2014  - one of those early-VR community gatherings where everyone was figuring out what positional tracking could do.</p>
+
+  <figure>
+    <img src="images/meetup-panoramic.jpg" alt="Panoramic view of the 2014 Austin VR meetup at The North Door, with PolyFish projected on a large screen and attendees watching" loading="lazy">
+    <figcaption>The 2014 Austin VR meetup at The North Door.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="images/meetup-vr-headset.jpg" alt="Close-up of an attendee wearing a VR headset experiencing PolyFish, with the underwater scene projected behind them" loading="lazy">
+    <figcaption>An attendee experiencing PolyFish in VR.</figcaption>
+  </figure>
+
+  <div class="timeline">
+    <div class="timeline-entry">
+      <div class="timeline-year">2014</div>
+      <h3>The VR Prototype</h3>
+      <p>Built in Unity as a positional-tracking experiment. Geometric creatures with procedural sine-wave animation, basic food chain, physics-driven movement. Demoed at an Austin VR meetup.</p>
+    </div>
+    <div class="timeline-entry">
+      <div class="timeline-year">2014 &ndash; 2025</div>
+      <h3>The Long Shelf</h3>
+      <p>The project sat dormant. Unity versions advanced, VR hardware evolved, but the little fish tank stayed frozen in time.</p>
+    </div>
+    <div class="timeline-entry">
+      <div class="timeline-year">2026</div>
+      <h3>The Remaster Begins</h3>
+      <p>A birthday gift idea sparked a rewrite from Unity to Three.js  - bringing the fish to the browser so the narration could be heard anywhere.</p>
+    </div>
+  </div>
+
+  <!-- ────────── Section: The Narration ────────── -->
+  <h2 id="narration">The Narration</h2>
+
+  <p>Once the core ecosystem was working in the original Unity build, a thought arrived: what if this had narration? The fish were already living and dying in a cycle that felt like a nature documentary. Why not lean into that?</p>
+
+  <p>Matt wrote a script  - deliberately cheesy, documentary-style voice-over  - and sent it to a voice-over pro he's close to: his father.</p>
+
+  <div class="pull-quote">
+    Being able to collaborate with my Dad on this was special. I had helped him with his work before, and now he could help me with mine.
+    <div class="attribution"> - Matt</div>
+  </div>
+
+  <p>The narration became the soul of the project. It transforms PolyFish from a tech demo into something with personality  - a little underwater documentary that doesn't take itself too seriously. The auto-play mode, where the camera system drives itself and narration triggers at key ecosystem moments, grew directly out of wanting to deliver that documentary experience end-to-end.</p>
+
+  <!-- ────────── Section: Why Remaster? ────────── -->
+  <h2 id="why-remaster">Why Remaster?</h2>
+
+  <p>The motivation was personal. Matt's father's birthday was coming up, and it felt like a fun challenge: bring the Unity project over to Three.js so he could hear his narration anywhere  - no install, no app store, just a URL.</p>
+
+  <p>The port itself was a smooth process using Claude, but there was a catch. The original project was a hand-built hacky experiment from 2014. The code worked, but it looked and felt dated. A straight port would have preserved the jank along with the charm.</p>
+
+  <p>What started as "get it running in a browser" became "let's see how much better this can be."</p>
+
+  <!-- ────────── Section: The Port ────────── -->
+  <h2 id="porting">The Port</h2>
+
+  <p>Porting from Unity to Three.js meant rethinking almost every system at a technical level while keeping the core experience intact. Here's what the translation looked like:</p>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">C#</div>
+      <div class="stat-label">Unity scripts &rarr; JavaScript</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">Rigidbody</div>
+      <div class="stat-label">Unity physics &rarr; Jolt WASM</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">50 Hz</div>
+      <div class="stat-label">FixedUpdate &rarr; rAF loop</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">HLSL</div>
+      <div class="stat-label">Unity shaders &rarr; GLSL</div>
+    </div>
+  </div>
+
+  <p><strong>Physics</strong> was the biggest shift. Unity's built-in Rigidbody system uses PhysX under the hood  - impulse-based forces at a fixed 50 Hz tick rate. The Three.js version uses <a href="https://github.com/jrouwe/JoltPhysics.js" target="_blank" rel="noopener">Jolt Physics</a> compiled to WebAssembly, running in the same frame loop as rendering. The force model had to be completely rethought: Unity applied tiny impulses per FixedUpdate with random bursts, while the remaster uses continuous thrust with smoothed acceleration.</p>
+
+  <p><strong>Creature config values</strong> were another challenge. The original Unity scene data had very specific tuning  - fish speed 0.8, engine burn time 0.43 seconds, metabolic clock of 2  - and the initial port guessed at many of these. Dialing them in took iteration: too fast and fish would overshoot food; too much food energy and the population would explode.</p>
+
+  <pre><code><span class="comment">// Unity's original movement: tiny impulse with random bursts</span>
+<span class="comment">// rigidBodyRef.AddRelativeForce(</span>
+<span class="comment">//   Vector3.forward * ((speed * Random.Range(1f, 2f)) / 10),</span>
+<span class="comment">//   ForceMode.Impulse);</span>
+
+<span class="comment">// Three.js remaster: continuous thrust with smoothed engine states</span>
+<span class="keyword">const</span> thrust = forward.multiplyScalar(cfg.thrustForce * speed);
+body.applyForce(thrust);</code></pre>
+
+  <p><strong>Rendering</strong> translated more naturally. Three.js and Unity both use scene graphs with meshes, materials, and lights, so the structure mapped well. But moving from Unity's built-in render pipeline to Three.js meant hand-writing shader modifications  - injecting caustic calculations, swim animation, and instancing logic into Three.js's standard material via <code>onBeforeCompile</code>.</p>
+
+  <!-- ────────── Section: What Changed ────────── -->
+  <h2 id="what-changed">What Changed</h2>
+
+  <p>The core experience is very much the same. The ecosystem is the heart of PolyFish and it stayed intact: the typical run starts slow and quiet, ramps up to wild levels of fish, then dies down once predators appear. That arc is preserved.</p>
+
+  <p>But the remaster isn't just a port  - it's a significant upgrade in almost every visual and technical dimension.</p>
+
+  <div class="comparison">
+    <div class="comparison-card before">
+      <h4>Unity Original (2014)</h4>
+      <ul>
+        <li>Keyframe + procedural sine animation</li>
+        <li>Static kelp meshes with gentle sway</li>
+        <li>Basic Unity fog and lighting</li>
+        <li>~100 creatures before frame drops</li>
+        <li>Simple free-look camera</li>
+        <li>Desktop/VR only (requires install)</li>
+      </ul>
+    </div>
+    <div class="comparison-card after">
+      <h4>Three.js Remaster (2026)</h4>
+      <ul>
+        <li>Fully shader-driven vertex animation</li>
+        <li>Verlet soft-body kelp with physics response</li>
+        <li>Custom caustics, instanced rendering, marine snow</li>
+        <li>200+ creatures at 60fps (thousands possible)</li>
+        <li>Documentary camera with 11 shot types</li>
+        <li>Runs in any browser  - just a URL</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Shader-Driven Animation</h3>
+
+  <p>After watching the GDC talk on making <em>Abzu</em> years ago, Matt wanted to explore shader-driven animation  - but it wasn't something he'd had time to learn the full technical implementation of. Working with Claude made it possible to get the basics up and running, then fine-tune until the result looked better and felt more responsive across all creature types. On top of looking better, it was a <em>significantly</em> more performant method. Instead of hundreds of creatures, the sim could now support thousands.</p>
+
+  <h3>Soft-Body Kelp</h3>
+
+  <p>Kelp got a huge improvement. The Unity version had simple animated meshes  - flowy bits that looked decent but didn't respond to their environment. The remaster uses a full <strong>Verlet physics simulation</strong>: each kelp stalk is a chain of nodes with constraints, influenced by current, creature collisions, and gravity. They're soft bodies that react to the world around them. The difference in immersion is dramatic.</p>
+
+  <h3>The Auto-Play Camera</h3>
+
+  <p>Something Matt loves doing with projects is building an "auto-play" mode. In PolyFish's case, that meant going all-in on the documentary feel. The auto-play system is the most robust camera system he's worked on so far: a Director that reads the ecosystem state, a Cinematographer that composes shots, and an Ecosystem Scout that finds interesting subjects. It picks shot types, manages transitions, and times narration triggers  - all to create a hands-off nature documentary that plays itself. It still needs work, but it was one of the most fun experiments in the project.</p>
+
+  <div class="callout">
+    <p><strong>The role of AI in the remaster:</strong> Claude was used extensively throughout the port  - from translating Unity C# to JavaScript, to implementing shader-driven swim animation, to building the cinematic camera system. The collaboration allowed rapid iteration on systems that would have taken much longer to learn and build from scratch.</p>
+  </div>
+
+</article>
+
+<!-- ── Page Nav ── -->
+<div class="page-nav">
+  <div></div>
+  <a href="ai.html" class="page-nav-link next">
+    <span class="page-nav-label">Next &rarr;</span>
+    <span class="page-nav-title">Collaborating with AI</span>
+  </a>
+</div>
+
+<footer>
+  <a href="/" class="footer-play">Play PolyFish</a><br>
+  &copy; 2026 The Department of Silly Stuff, LLC  -  Made with Three.js and too many late nights.
+</footer>
+
+<!-- ── Fermentation Demo Script ── -->
+<script>
+(function() {
+  const canvas = document.getElementById('demo-fermentation');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const statsEl = document.getElementById('ferm-stats');
+
+  let W, H;
+  const organisms = [];
+  const dead = [];
+  const food = [];
+  let frame = 0;
+  let phase = 'living'; // 'living', 'dying', 'waiting'
+  let waitTimer = 0;
+
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    W = canvas.width = rect.width;
+    H = canvas.height = 420;
+  }
+  resize();
+
+  function spawnOrganism(x, y, energy) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 0.8 + Math.random() * 0.8;
+    organisms.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      energy: energy || 100,
+      size: 4,
+      eaten: 0
+    });
+  }
+
+  function spawnFood() {
+    food.push({
+      x: 20 + Math.random() * (W - 40),
+      y: 20 + Math.random() * (H - 40),
+      size: 2.5 + Math.random() * 1.5,
+      pulse: Math.random() * Math.PI * 2
+    });
+  }
+
+  function init() {
+    organisms.length = 0;
+    dead.length = 0;
+    food.length = 0;
+    frame = 0;
+    phase = 'living';
+    waitTimer = 0;
+    // Lots of food scattered everywhere
+    for (let i = 0; i < 200; i++) spawnFood();
+    // One single yeast organism
+    spawnOrganism(W * 0.5, H * 0.5, 120);
+  }
+  init();
+
+  function drawSquare(ctx, x, y, size, vx, vy, alpha) {
+    const s = size * 0.7;
+    const angle = Math.atan2(vy, vx);
+    ctx.globalAlpha = alpha;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.rect(-s, -s, s * 2, s * 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  function update() {
+    frame++;
+
+    if (phase === 'living') {
+      // No new food - they eat what's there
+      for (let i = organisms.length - 1; i >= 0; i--) {
+        const o = organisms[i];
+        o.energy -= 0.08;
+        o.size = 4 + Math.min(o.eaten, 6) * 0.8;
+
+        // Seek nearest food
+        let nearDist = Infinity, nearIdx = -1;
+        for (let j = 0; j < food.length; j++) {
+          const dx = food[j].x - o.x, dy = food[j].y - o.y;
+          const d = dx * dx + dy * dy;
+          if (d < nearDist) { nearDist = d; nearIdx = j; }
+        }
+
+        if (nearIdx >= 0) {
+          const f = food[nearIdx];
+          const dx = f.x - o.x, dy = f.y - o.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 0) {
+            // Stronger seek with arrival slowdown
+            const force = dist < 30 ? 0.25 : 0.4;
+            o.vx += (dx / dist) * force;
+            o.vy += (dy / dist) * force;
+          }
+          if (dist < 12) {
+            o.energy += 30;
+            o.eaten++;
+            food.splice(nearIdx, 1);
+          }
+        }
+
+        // Wander
+        o.vx += (Math.random() - 0.5) * 0.02;
+        o.vy += (Math.random() - 0.5) * 0.02;
+        o.vx *= 0.92;
+        o.vy *= 0.92;
+        o.x += o.vx;
+        o.y += o.vy;
+
+        // Bounce off edges
+        if (o.x < o.size) { o.x = o.size; o.vx *= -0.5; }
+        if (o.x > W - o.size) { o.x = W - o.size; o.vx *= -0.5; }
+        if (o.y < o.size) { o.y = o.size; o.vy *= -0.5; }
+        if (o.y > H - o.size) { o.y = H - o.size; o.vy *= -0.5; }
+
+        // Reproduce
+        if (o.eaten >= 2 && o.energy > 40 && organisms.length < 500) {
+          o.eaten = 0;
+          o.energy *= 0.5;
+          spawnOrganism(o.x + (Math.random() - 0.5) * 10, o.y + (Math.random() - 0.5) * 10, o.energy * 0.8);
+        }
+      }
+
+      // Once food is gone, trigger die-off
+      if (food.length === 0 && organisms.length > 0) {
+        phase = 'dying';
+        // Kill all organisms - transfer to dead array
+        for (const o of organisms) {
+          dead.push({
+            x: o.x, y: o.y,
+            vx: o.vx * 0.3, vy: 0.2 + Math.random() * 0.5,
+            size: o.size,
+            alpha: 0.8,
+            settled: false
+          });
+        }
+        organisms.length = 0;
+      }
+    }
+
+    if (phase === 'dying') {
+      let allSettled = true;
+      for (const d of dead) {
+        if (!d.settled) {
+          // Fall with gravity
+          d.vy += 0.015;
+          d.vx *= 0.98;
+          d.x += d.vx;
+          d.y += d.vy;
+          // Settle on the bottom
+          if (d.y >= H - d.size - 4) {
+            d.y = H - d.size - 4;
+            d.vy = 0;
+            d.vx = 0;
+            d.settled = true;
+          }
+          allSettled = false;
+        }
+        d.alpha = Math.max(0.15, d.alpha - 0.002);
+      }
+      if (allSettled) {
+        phase = 'waiting';
+        waitTimer = 0;
+      }
+    }
+
+    if (phase === 'waiting') {
+      waitTimer++;
+      // Fade out the dead
+      for (const d of dead) {
+        d.alpha = Math.max(0, d.alpha - 0.004);
+      }
+      // After ~3 seconds (180 frames), restart
+      if (waitTimer > 180) {
+        init();
+      }
+    }
+
+    // Stats
+    if (frame % 10 === 0) {
+      const alive = organisms.length;
+      const fdCount = food.length;
+      if (phase === 'living') {
+        statsEl.textContent = 'Yeast: ' + alive + '  |  Sugar: ' + fdCount;
+      } else if (phase === 'dying') {
+        statsEl.textContent = 'Die-off  |  ' + dead.length + ' falling';
+      } else {
+        statsEl.textContent = 'Cycle complete  |  Restarting...';
+      }
+    }
+  }
+
+  function draw() {
+    ctx.fillStyle = '#060a14';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 40) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    }
+    for (let y = 0; y < H; y += 40) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+
+    // Draw food (green circles)
+    for (const f of food) {
+      const pulse = 0.4 + Math.sin(frame * 0.03 + f.pulse) * 0.15;
+      ctx.fillStyle = `rgba(160, 220, 100, ${pulse})`;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Draw living organisms (amber squares)
+    for (const o of organisms) {
+      const energyPct = Math.max(0, Math.min(1, o.energy / 100));
+      ctx.fillStyle = `rgb(255,${Math.floor(120 + energyPct * 80)},${Math.floor(30 + energyPct * 20)})`;
+      drawSquare(ctx, o.x, o.y, o.size, o.vx, o.vy, 0.5 + energyPct * 0.5);
+      if (energyPct > 0.5) {
+        ctx.fillStyle = `rgba(255, 153, 51, ${energyPct * 0.1})`;
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, o.size * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Draw dead organisms (faded, falling or settled)
+    for (const d of dead) {
+      ctx.fillStyle = `rgba(150, 100, 50, ${d.alpha})`;
+      drawSquare(ctx, d.x, d.y, d.size, d.vx, d.vy, d.alpha);
+    }
+  }
+
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  window.addEventListener('resize', resize);
+})();
+</script>
+
+</body>
+</html>

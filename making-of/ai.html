@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Collaborating with AI  -  Making of PolyFish</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">Making of <span>PolyFish</span></a>
+    <a href="/" class="nav-play-mobile">&#9654; Play PolyFish</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+    </button>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="origins.html">Origins</a>
+      <a href="ai.html" class="active">AI Collab</a>
+      <a href="creatures.html">Creatures</a>
+      <a href="ecosystem.html">Ecosystem</a>
+      <a href="kelp.html">Kelp</a>
+      <a href="rendering.html">Rendering</a>
+      <a href="camera.html">Camera</a>
+      <a href="audio.html">Audio</a>
+      <a href="performance.html">Performance</a>
+      <a href="demos.html">Demos</a>
+      <a href="/" class="nav-play">Play PolyFish</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-header">
+  <div class="breadcrumb">Chapter 01</div>
+  <h1 class="page-title">Collaborating with AI</h1>
+  <p class="page-subtitle">How a solo developer and an AI pair-programmed a 20,000-line codebase - what worked, what didn't, and what we learned about building together.</p>
+</header>
+
+<article>
+
+  <div class="toc">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#premise">The Premise</a></li>
+      <li><a href="#approach">Our Approach</a></li>
+      <li><a href="#what-worked">What Worked</a></li>
+      <li><a href="#pain-points">Pain Points</a></li>
+      <li><a href="#unexpected-wins">Unexpected Wins</a></li>
+      <li><a href="#accessibility">Accessibility</a></li>
+      <li><a href="#refining">Refining the Collaboration</a></li>
+      <li><a href="#going-forward">Going Forward</a></li>
+    </ol>
+  </div>
+
+  <!-- ────────── Section: The Premise ────────── -->
+  <h2 id="premise">The Premise</h2>
+
+  <p>PolyFish was built almost entirely through human-AI collaboration. Matt provided the creative vision, game design, and artistic direction. Claude (by Anthropic) handled the bulk of the code implementation - from translating a decade-old Unity prototype into modern JavaScript to building systems that neither of us had built before.</p>
+
+  <p>This wasn't a case of asking an AI to "make me a game." It was closer to an intensive pair programming sprint where one partner has deep domain knowledge and the other can write code very fast but needs constant steering. The result is roughly 20,000 lines of JavaScript across 63 source files, a full WebXR integration, a documentary camera system, and the Making Of site you're reading right now.</p>
+
+  <p>What follows is an honest accounting of how that process worked.</p>
+
+  <!-- ────────── Section: Our Approach ────────── -->
+  <h2 id="approach">Our Approach</h2>
+
+  <h3>The Translation Layer</h3>
+
+  <p>The project started as a port. Matt had a working Unity prototype from 2014 with C# scripts, HLSL shaders, and Unity-specific physics. Translating that into Three.js meant more than syntax conversion - Unity's component system, FixedUpdate loop, and rigidbody physics have no direct equivalents in a browser.</p>
+
+  <p>The approach was system-by-system. Matt would share the relevant C# code and describe the intended behavior. Claude would produce a JavaScript implementation, and the two would iterate until it felt right. The creature AI alone went through dozens of revisions before the fish moved the way Matt remembered.</p>
+
+  <h3>The "Creative Director + Technical Lead" Dynamic</h3>
+
+  <p>Over time, a natural rhythm emerged. Matt operated as creative director: deciding what to build, how it should feel, and when something was off. Claude operated as technical lead: proposing architectures, writing implementations, and debugging when things broke. Neither role was rigid - Matt would sometimes dive into code directly, and Claude would sometimes push back on a design direction with a technical argument.</p>
+
+  <p>The key insight was that this worked best when Matt described <strong>what he wanted to experience</strong> rather than <strong>what code to write</strong>. "The dolphins feel too robotic" was a better prompt than "change the steering algorithm." It gave Claude room to propose solutions Matt hadn't considered.</p>
+
+  <p>This experience-driven development approach unlocked better outcomes than detailed technical specifications. Instead of Matt being limited to the boundaries of his own technical knowledge or vocabulary, he could say "I want it to feel like a nature documentary" and Claude would figure out the camera system, timing, and transitions. Describing the desired experience meant the collaboration could reach further than either partner's individual constraints would allow.</p>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">~20K</div>
+      <div class="stat-label">Lines of code</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">63</div>
+      <div class="stat-label">Source files</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">11</div>
+      <div class="stat-label">Major subsystems</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">9</div>
+      <div class="stat-label">Making-of chapters</div>
+    </div>
+  </div>
+
+  <!-- ────────── Section: What Worked ────────── -->
+  <h2 id="what-worked">What Worked</h2>
+
+  <h3>Rapid Prototyping of Complex Systems</h3>
+
+  <p>Some of the most satisfying moments came from building systems that would have taken weeks to learn and implement solo. The <a href="camera.html">documentary camera system</a> is a good example: a Director that manages narrative phases, a Cinematographer that composes shots with 11 different shot types, and an Ecosystem Scout that detects interesting creature behavior to film. That's roughly 2,500 lines of interconnected state-machine code. Claude produced a working first draft in a single session, and Matt could immediately start tweaking shot feel instead of spending days getting a basic follow-cam working.</p>
+
+  <p>The <a href="rendering.html">caustic shader system</a> followed the same pattern. Matt described the look he wanted for seabed light patterns, Claude produced a GLSL implementation using domain-warped Voronoi cells, and Matt tuned the colors and speed. The result looks better than anything either would have built independently.</p>
+
+  <h3>The Port Itself</h3>
+
+  <p>Translating Unity C# to Three.js JavaScript is a surprisingly nuanced job. Unity has a component system; Three.js has a scene graph. Unity has FixedUpdate at 50Hz; the browser has requestAnimationFrame at variable rates. Unity has built-in rigidbody physics; the browser has nothing unless you bring your own. Claude handled these translation decisions well because it could hold the mental model of both engines simultaneously and identify where a direct port would fail.</p>
+
+  <h3>Verification as a Superpower</h3>
+
+  <p>One of the most valuable practices was asking Claude to verify its own code - to check that the app was behaving according to its own expectations. This created a self-correcting loop where Claude could catch its own mistakes before they became bugs. Rather than relying solely on Matt's testing, having the AI reason through its own implementation and spot inconsistencies caught edge cases that might otherwise have shipped. It's a form of rubber-duck debugging elevated to a structural principle: the AI could debug itself.</p>
+
+  <h3>Documentation as a Byproduct</h3>
+
+  <p>This Making Of site was built collaboratively, and the process revealed something useful: because Claude had been involved in building every system, it could write accurate technical documentation about them. The interactive demos, architecture explanations, and code walkthroughs are all drawn from actual implementation knowledge rather than reverse-engineering.</p>
+
+  <!-- ────────── Section: Pain Points ────────── -->
+  <h2 id="pain-points">Pain Points</h2>
+
+  <h3>Context Window Limits</h3>
+
+  <p>The single biggest friction point. An AI can only hold so much code in its working memory at once, and PolyFish has 63 source files where changes to one system often ripple through several others. When Claude lost context on how the creature system's engine burn states connected to the instanced rendering pipeline, things broke in subtle ways. Re-sharing files and re-explaining architecture worked, but that overhead added up.</p>
+
+  <p>Long sessions were especially vulnerable. After hours of iteration, Claude would start making suggestions that contradicted earlier decisions. The solution was focused sprints - one system per session, with clear goals - rather than marathon conversations.</p>
+
+  <h3>Overconfident Code Generation</h3>
+
+  <p>Claude writes code quickly and confidently. That's great when it's right, and frustrating when it's wrong with the same confidence. A division by zero when no fish were alive. A NaN propagating through the physics system. A shader that compiled on desktop but failed on mobile GPUs. Each looked correct on review.</p>
+
+  <p>The lesson: AI-generated code needs the same rigor as any code. "It looks right" isn't the same as "it works."</p>
+
+  <h3>The "Almost Right" Problem</h3>
+
+  <p>Sometimes Claude would produce something 90% correct but subtly wrong in a way that took longer to diagnose than writing it from scratch would have. A Verlet constraint solver that was stable but too stiff. A camera transition that eased correctly but targeted the wrong position. An audio crossfade that faded out but never faded back in. The code was well-structured and readable - the kind you'd trust on visual inspection - which made the bugs harder to catch.</p>
+
+  <h3>Regressions During Refactoring</h3>
+
+  <p>Large refactors were risky. When Claude restructured a system, it would sometimes lose track of subtle behaviors the old code handled implicitly - a creature AI that forgot to check for dead targets, a rendering pipeline rework that dropped a caustic intensity uniform. Each regression was small, but they compounded during big changes.</p>
+
+  <!-- ────────── Section: Unexpected Wins ────────── -->
+  <h2 id="unexpected-wins">Unexpected Wins</h2>
+
+  <h3>Systems Neither of Us Had Built Before</h3>
+
+  <p>The most surprising outcome was how well the collaboration handled novel territory. Matt had never written a Verlet physics solver. The <a href="kelp.html">kelp system</a> was uncharted for both of us - Matt described how kelp should behave physically, Claude proposed position-based dynamics, and iterative tuning of buoyancy, damping, and constraint stiffness produced something that genuinely looks organic.</p>
+
+  <p>The <a href="creatures.html">vertex-shader swim animation</a> was another leap. Inspired by a GDC talk about Abzu, Matt wanted GPU-driven creature animation. Claude's first attempt was recognizable but stiff; after several rounds of tweaking amplitude curves and phase offsets, the fish undulate convincingly. Performance went from ~100 creatures with CPU animation to 200+ with the GPU approach.</p>
+
+  <h3>Cross-Domain Problem Solving</h3>
+
+  <p>The collaboration shines when a problem spans multiple domains. The <a href="audio.html">narration system</a> needed to coordinate audio timing, camera cuts, creature AI, and UI state - four separate systems working in concert. Claude could reason about all four simultaneously in a way that would have required constant context-switching for a solo developer.</p>
+
+  <h3>Toolmaking for Collaboration</h3>
+
+  <p>Another major win emerged from asking Claude to build tools that they'd then use together to dial in concepts. Instead of tweaking magic numbers deep in code, Claude would create interactive sliders, visualizers, and test harnesses that made the tuning process collaborative and visual. Building a caustic shader? Claude created a Voronoi explorer where Matt could adjust parameters in real-time and see results instantly. Tuning creature behavior? Tools let them visualize neural pathways and sensor ranges. These collaborative tools made iteration faster and the feedback loop tighter - neither partner was guessing anymore.</p>
+
+  <h3>This Site</h3>
+
+  <p>What started as a simple documentation exercise turned into a genuine technical writing project - interactive WebGL demos, magazine-style layout, deep dives into each system. Building it collaboratively meant the demos could be technically accurate (Claude built the original systems) and the writing could be editorially polished (Matt pushed for clarity and voice). It also served as a forcing function: explaining a system well enough to document it often revealed bugs or design improvements.</p>
+
+  <!-- ────────── Section: Accessibility ────────── -->
+  <h2 id="accessibility">Accessibility</h2>
+
+  <p>There's an aspect of this collaboration that doesn't fit neatly into a technical write-up, but it's one of the most important parts of the project for Matt personally.</p>
+
+  <p>Matt lives with autoimmune illness. Chronic pain and fatigue are baseline. Catching other illnesses is frequent and recovery is slow. On a bad day, the kind of sustained focus that complex systems programming demands - holding a mental model of interacting state machines, tracking down a NaN propagating through a physics pipeline, reasoning about race conditions in an audio system - is somewhere between difficult and impossible. Pain doesn't politely pause while you debug a shader.</p>
+
+  <p>Before this project, that meant creative work happened in unpredictable bursts. A good week might produce real progress. A bad month might produce nothing, and the re-ramp cost of picking the project back up after a gap could eat the next good week entirely. The emotional toll of that cycle - wanting to build things, having the ideas, but lacking the physical capacity to execute - is its own kind of exhausting.</p>
+
+  <p>Working with Claude changed the economics of that equation. The collaboration let Matt operate at the level where his illness doesn't reach: high-level creative direction, describing how something should feel, identifying when something is wrong. The implementation details - the part that requires unbroken concentration and exacts the highest cognitive tax - could be delegated. Not eliminated, but moved to a partner who doesn't experience pain, doesn't lose focus, and doesn't need to re-ramp after a bad week.</p>
+
+  <p>Some tasks carry an emotional cost that's invisible from the outside. Slogging through a complex refactor when your body is fighting you isn't just slower - it's demoralizing. Every misplaced semicolon feels heavier. Every failed build stings more. Claude doesn't experience any of that. It approaches a 500-line refactor with the same energy whether it's the first task of the day or the fiftieth. That asymmetry turned out to be genuinely freeing. Matt could bring the creative energy and directorial focus; Claude could handle the implementation grind that illness makes punishing.</p>
+
+  <p>The result is that PolyFish exists. Not a simplified version, not a scaled-back proof of concept - a full real-time ecosystem simulation with physics, shaders, spatial audio, a cinematic camera, and VR support. Built in spare time, during a period that included plenty of bad days. That wouldn't have happened without AI as a collaborator. The ideas were always there. The bottleneck was always execution capacity, and this collaboration removed it.</p>
+
+  <p>AI-as-accessibility-tool isn't a framing you hear much in the current conversation around these technologies. But for anyone whose creative ambitions outpace what their body allows on a given day, it's a meaningful one.</p>
+
+  <!-- ────────── Section: Refining the Collaboration ────────── -->
+  <h2 id="refining">Refining the Collaboration</h2>
+
+  <h3>What We Learned</h3>
+
+  <p>Over the course of the project, the collaboration got noticeably better. Some patterns that emerged:</p>
+
+  <p><strong>Small, focused sessions beat marathons.</strong> A 2-hour session with a clear goal ("get the oxygen system working for dolphins") produced better results than an 8-hour session with a vague one ("work on creature AI"). Context stayed fresher and regressions were easier to catch.</p>
+
+  <p><strong>Show, don't spec.</strong> Screenshots and live browser tabs were more effective than written specifications. Pointing at a swimming fish and saying "that turn looks too sharp" gave Claude more actionable information than a paragraph describing the desired turning radius in degrees.</p>
+
+  <p><strong>Let the AI propose architecture.</strong> The results were usually better when Matt described desired behavior and let Claude choose the approach. Claude proposed using a spatial hash for nearest-neighbor queries instead of brute-force distance checks - a pattern Matt hadn't considered that turned out to be critical for performance.</p>
+
+  <p><strong>Commit often.</strong> Small, frequent commits made it easy to roll back when an AI-generated change introduced regressions. Large, sweeping changes were harder to debug and easier to lose work in.</p>
+
+  <h3>Project Rules as Guardrails</h3>
+
+  <p>The project's <code>CLAUDE.md</code> file - a set of instructions that persist across sessions - became increasingly important. It started with a single writing style rule. Over time it grew to include architectural conventions, naming patterns, and performance constraints. These rules gave Claude consistent context even in fresh sessions, reducing ramp-up time significantly.</p>
+
+  <!-- ────────── Section: Going Forward ────────── -->
+  <h2 id="going-forward">Going Forward</h2>
+
+  <h3>What We'd Do Differently</h3>
+
+  <p>If we started over, we'd invest more in automated testing from day one. The project has tests, but they were added retroactively. AI-generated code is especially test-worthy because the author can't always predict edge cases the way a human who struggled through the implementation might.</p>
+
+  <p>We'd also be more deliberate about architecture documentation. The codebase has inline comments but no centralized architecture guide. When Claude starts a new session and needs to understand how the rendering pipeline connects to the creature system connects to the physics worker, it re-discovers that from code. A living architecture doc would save real time.</p>
+
+  <h3>The Bigger Picture</h3>
+
+  <p>Building PolyFish with AI didn't feel like using a tool. It felt like working with a collaborator who types very fast, never gets tired, and occasionally forgets what you talked about yesterday. A real-time ecosystem simulation with physics, spatial audio, a cinematic camera, and VR support would have been a multi-month project for a small team. What makes this remarkable is that Matt built it entirely in spare time, in under two weeks - this wasn't a full-time effort. As a solo developer with an AI partner working on evenings and weekends, he created something that would typically require a team and months of sustained focus.</p>
+
+  <p>That's not because AI replaces skill. Matt's design sensibility and willingness to say "no, that's not right, try again" were essential. The AI amplified what he could build, but it didn't decide what to build. The collaboration worked because both partners contributed something the other couldn't.</p>
+
+  <!-- ── Page Nav ── -->
+  <div class="page-nav">
+    <a href="origins.html">
+      <span class="nav-dir">&larr; Previous</span>
+      <span class="nav-title">Origins</span>
+    </a>
+    <a href="creatures.html">
+      <span class="nav-dir">Next &rarr;</span>
+      <span class="nav-title">Creatures</span>
+    </a>
+  </div>
+
+</article>
+
+<footer>
+  <a href="/" class="footer-play">Play PolyFish</a><br>
+  &copy; 2026 The Department of Silly Stuff, LLC
+</footer>
+
+</body>
+</html>

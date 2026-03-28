@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creatures & AI  -  Making of PolyFish</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">Making of <span>PolyFish</span></a>
+    <a href="/" class="nav-play-mobile">&#9654; Play PolyFish</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+    </button>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="origins.html">Origins</a>
+      <a href="ai.html">AI Collab</a>
+      <a href="creatures.html" class="active">Creatures</a>
+      <a href="ecosystem.html">Ecosystem</a>
+      <a href="kelp.html">Kelp</a>
+      <a href="rendering.html">Rendering</a>
+      <a href="camera.html">Camera</a>
+      <a href="audio.html">Audio</a>
+      <a href="performance.html">Performance</a>
+      <a href="demos.html">Demos</a>
+      <a href="/" class="nav-play">Play PolyFish</a>
+    </div>
+  </div>
+</nav>
+
+<header class="page-header">
+  <div class="breadcrumb">Chapter 02</div>
+  <h1 class="page-title">Creatures &amp; AI</h1>
+  <p class="page-subtitle">Three species with distinct behaviors, staggered decision ticks, continuous-force locomotion, and vertex-shader swim animation.</p>
+</header>
+
+<article>
+
+  <div class="toc">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#species">Three Species Architecture</a></li>
+      <li><a href="#thrust-locomotion">Thrust &amp; Locomotion</a></li>
+      <li><a href="#oxygen-system">Oxygen System (Dolphins)</a></li>
+    </ol>
+  </div>
+
+  <!-- ────────── Section: Three Species Architecture ────────── -->
+  <h2 id="species">Three Species Architecture</h2>
+
+  <p>PolyFish simulates three distinct creatures, each with its own behavior, speed, and decision-making cadence. This creates an ecosystem with layered complexity: fish are skittish prey, dolphins are intelligent predators that manage air, and manatees are slow browsers. No creature type dominates  -  all three coexist dynamically.</p>
+
+  <!-- Creature Viewers - dynamically populated -->
+  <div id="creature-viewers-container"></div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">8.36x</div>
+      <div class="stat-label">Fish thrust</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">10x</div>
+      <div class="stat-label">Dolphin thrust</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">6.69x</div>
+      <div class="stat-label">Manatee thrust</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">3</div>
+      <div class="stat-label">Species in ecosystem</div>
+    </div>
+  </div>
+
+  <!-- ────────── Section: Thrust & Locomotion ────────── -->
+  <h2 id="thrust-locomotion">Thrust &amp; Locomotion</h2>
+
+  <p>Unlike traditional rigid-body physics that applies instantaneous impulses, PolyFish creatures use <strong>continuous force</strong>  -  constant acceleration in a chosen direction. Each frame, if the creature is moving, its velocity vector is pushed toward a target velocity based on the desired heading and throttle. This creates smooth, realistic acceleration/deceleration curves without sudden snaps.</p>
+
+  <h3>The Thrust Model</h3>
+  <p>Each creature has a <strong>thrust multiplier</strong> that scales global acceleration:</p>
+  <ul style="margin-bottom: 1.4em;">
+    <li><strong>Fish:</strong> 8.36× (nimble, responsive)</li>
+    <li><strong>Dolphin:</strong> 10× (powerful, accelerates fastest)</li>
+    <li><strong>Manatee:</strong> 6.69× (sluggish, takes time to reach speed)</li>
+  </ul>
+
+  <p>Target velocity is computed as <code>heading * baseSpeed * throttleScale</code>, where <code>throttleScale</code> is 0 (idling), 1.0 (cruise), or 2.5 (dashing). The current velocity is then lerped toward target velocity at a per-creature acceleration rate (roughly 60ms per 10% of top speed). This soft acceleration prevents overshooting and makes creatures feel heavy and inertial.</p>
+
+  <p>Deceleration is slower than acceleration  -  when throttle drops to 0, the creature coasts for a moment before stopping. This is physically unrealistic but feels great: creatures have momentum, they don't snap to idle. Per-species drag values (fish 2.27, dolphin 2.0, manatee 1.65) create natural friction that eventually brings them to rest. Lighter drag on manatees means they coast longer and feel heavier.</p>
+
+  <div class="demo-container" id="demo-velocity-lerp-container"></div>
+
+  <h3>Engine Burn Cycles</h3>
+  <p>Instead of creatures swimming at constant speed, they cycle through "engine burns": a species-specific burn time at full throttle (0.43s for fish, 1.0s for dolphins, 0.9s for manatees), followed by a randomized coasting period before the next burn. This on-off pattern emerges naturally from hunting and foraging behavior, but it also serves to break up animation repetition. No two creatures sync their burn cycles because each has a randomized phase offset.</p>
+
+  <h3>Dash Mechanic</h3>
+  <p>When a fish spots a dolphin, or a dolphin locks onto a meal, something changes. A creature can trigger a dash - a brief 2.5x speed boost lasting 0.4 seconds. It's not guaranteed (15% chance per brain tick), so hunts become moments of chance. A fish might break free. A dolphin might strike. The unpredictability is what makes chases feel alive.</p>
+
+<!-- ────────── Section: Oxygen System (Dolphins) ────────── -->
+  <h2 id="oxygen-system">Oxygen System (Dolphins)</h2>
+
+  <p>Dolphins are mammals  -  they must breathe. This adds a strategic layer: a dolphin can hunt indefinitely underwater, but it must surface every 60 seconds or it dies. The oxygen system is simple but creates interesting emergent behavior: dolphins hunt in bursts, surface to breathe, then hunt again.</p>
+
+  <h3>Tank Mechanics</h3>
+  <p>Each dolphin has an oxygen tank stored as a 0-1 gauge. While submerged, the tank depletes at 0.0167 per second, draining completely in about 60 seconds. At the surface, the tank refills at 0.25/second, taking about 4 seconds to fill from empty. In practice, dolphins surface well before hitting zero (the urgent threshold kicks in at 30%), so refills are quicker.</p>
+
+  <h3>Emergent Behavior</h3>
+  <p>The oxygen system creates a natural hunting cycle. A dolphin hunts a school of fish, drives them into a corner, and just as it's about to catch one, the oxygen alarm triggers. It must surface, losing the prey. By the time it returns, the fish have scattered. This makes dolphins feel mortal and prey feel hopeful  -  the ocean isn't a guaranteed predation grounds.</p>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">60s</div>
+      <div class="stat-label">Tank capacity</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">0.0167</div>
+      <div class="stat-label">Depletion rate/sec</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">~4s</div>
+      <div class="stat-label">Refill time (full)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">10%</div>
+      <div class="stat-label">Critical threshold</div>
+    </div>
+  </div>
+
+  <!-- ── Page Navigation ── -->
+  <div class="page-nav">
+    <a href="ai.html">
+      <span class="nav-dir">&larr; Previous</span>
+      <span class="nav-title">Collaborating with AI</span>
+    </a>
+    <a href="ecosystem.html">
+      <span class="nav-dir">Next &rarr;</span>
+      <span class="nav-title">Ecosystem &amp; Food Chain</span>
+    </a>
+  </div>
+
+</article>
+
+<footer>
+  <a href="/" class="footer-play">Play PolyFish</a><br>
+  &copy; 2026 The Department of Silly Stuff, LLC
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════════
+     DEMO SCRIPTS
+     ══════════════════════════════════════════════════════════════ -->
+
+<!-- Three.js library for creature viewers demo -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script type="module">
+  import { init as initCreatureViewers } from './demos/creature-viewers.js';
+  import { init as initVelocityLerp } from './demos/velocity-lerp.js';
+
+  window.addEventListener('load', async () => {
+    // Initialize creature viewers
+    const viewersContainer = document.getElementById('creature-viewers-container');
+    if (viewersContainer) await initCreatureViewers(viewersContainer);
+
+    // Initialize velocity/thrust demo
+    const velocityContainer = document.getElementById('demo-velocity-lerp-container');
+    if (velocityContainer) initVelocityLerp(velocityContainer);
+  });
+</script>
+
+<script>
+// Placeholder for original inline code - removed to use modules instead
+/*
+// ── Shared: Individual 3D Creature Viewers ──
+// Matches the game exactly: MeshStandardMaterial (vertex colors, flat shading,
+// IBL params) + JS-based vertex displacement using the game's SwimMaterial configs.
+
+// Swim configs pulled directly from the game's SwimMaterial.js
+// Each creature has idle, thrust, and coast animation modes
+const SWIM_CONFIGS = {
+  fish: {
+    frequency: 1.5, maskStart: 0.4, maskFloor: 0.15, headPhase: 0.5, swimAxis: 0,
+    modes: {
+      idle:   { amplitude: 0.014,  speed: 5.34,  label: 'Idle'   },
+      thrust: { amplitude: 0.0022, speed: 18.85, label: 'Thrust' },
+      coast:  { amplitude: 0.0,    speed: 0.0,   label: 'Coast'  }
+    }
+  },
+  dolphin: {
+    frequency: 1.2, maskStart: 0.25, maskFloor: 0.1, headPhase: 0.4, swimAxis: 1,
+    modes: {
+      idle:   { amplitude: 0.01,  speed: 4.0,  label: 'Idle'   },
+      thrust: { amplitude: 0.002, speed: 15.0, label: 'Thrust' },
+      coast:  { amplitude: 0.0,   speed: 0.0,  label: 'Coast'  }
+    }
+  },
+  manatee: {
+    frequency: 1.0, maskStart: 0.3, maskFloor: 0.1, headPhase: 0.3, swimAxis: 1,
+    modes: {
+      idle:   { amplitude: 0.01,  speed: 3.0,  label: 'Idle'   },
+      thrust: { amplitude: 0.002, speed: 10.0, label: 'Thrust' },
+      coast:  { amplitude: 0.0,   speed: 0.0,  label: 'Coast'  }
+    }
+  }
+};
+
+function createCreatureViewer(canvasId, creatureType) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const spec = SWIM_CONFIGS[creatureType];
+  let currentMode = 'idle';
+  const activeMode = spec.modes[currentMode];
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a1628);
+  scene.fog = new THREE.Fog(0x0a1628, 15, 40);
+
+  // Lighting: match the game's underwater scene
+  const ambient = new THREE.AmbientLight(0x233943, 2.5);
+  scene.add(ambient);
+  const sun = new THREE.DirectionalLight(0xaaccff, 2.5);
+  sun.position.set(50, 100, 50);
+  scene.add(sun);
+  const hemi = new THREE.HemisphereLight(0x3366aa, 0x443320, 0.6);
+  scene.add(hemi);
+
+  const camera = new THREE.PerspectiveCamera(40, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  function resize() {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const gltfLoader = new THREE.GLTFLoader();
+  let orbitRadius = 2.5;
+  const lookTarget = new THREE.Vector3(0, 0, 0);
+  const swimMeshes = []; // Store mesh data for JS vertex animation
+
+  const modelPath = creatureType + '_rigged.glb';
+  const tryPaths = ['/models/' + modelPath, '../assets/models/' + modelPath, '/assets/models/' + modelPath, '../dist/models/' + modelPath];
+  function tryLoad(idx) {
+    if (idx >= tryPaths.length) {
+      console.error('Failed to load model: ' + creatureType);
+      return;
+    }
+    gltfLoader.load(tryPaths[idx], (gltf) => {
+      const model = gltf.scene;
+
+      // Fix orientation: Blender→glTF has creatures pointing along +Y
+      model.rotation.x = -Math.PI / 2;
+      scene.add(model);
+
+      // Compute bounding box AFTER rotation
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+
+      // Scale model so longest axis fills ~1.8 units
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const desiredSize = 1.8;
+      const s = desiredSize / maxDim;
+      model.scale.setScalar(s);
+
+      // Recompute bounds after scaling, center at origin
+      model.updateMatrixWorld(true);
+      const box2 = new THREE.Box3().setFromObject(model);
+      const center2 = new THREE.Vector3();
+      box2.getCenter(center2);
+      model.position.sub(center2);
+
+      orbitRadius = desiredSize * 1.6;
+
+      // Apply materials + gather vertex data for swim animation
+      model.traverse((child) => {
+        if (child.isMesh && child.material) {
+          const geo = child.geometry;
+          const hasVC = geo.attributes.color != null;
+
+          // Match IBLMaterial.js exactly
+          child.material = new THREE.MeshStandardMaterial({
+            vertexColors: hasVC,
+            flatShading: true,
+            roughness: 0.85,
+            metalness: 0.05,
+            envMapIntensity: 1.2,
+            side: THREE.DoubleSide,
+            color: hasVC ? 0xffffff : child.material.color
+          });
+
+          // Store original positions for JS-based swim displacement
+          const posAttr = geo.attributes.position;
+          const origPositions = new Float32Array(posAttr.array.length);
+          origPositions.set(posAttr.array);
+
+          // Compute local Z bounds (in local/unrotated space) for body ramp
+          geo.computeBoundingBox();
+          const bb = geo.boundingBox;
+          const zMin = bb.min.z;
+          const zRange = (bb.max.z - bb.min.z) || 1;
+
+          swimMeshes.push({ posAttr, origPositions, zMin, zRange });
+        }
+      });
+    }, undefined, () => { console.warn('Model load failed for ' + creatureType + ' at path: ' + tryPaths[idx]); tryLoad(idx + 1); });
+  }
+  tryLoad(0);
+
+  // Build mode toggle buttons inside the demo-container
+  const container = canvas.closest('.demo-container');
+  if (container) {
+    const controls = document.createElement('div');
+    controls.className = 'demo-controls';
+    container.appendChild(controls);
+    Object.keys(spec.modes).forEach(modeKey => {
+      const btn = document.createElement('button');
+      btn.textContent = spec.modes[modeKey].label;
+      btn.className = modeKey === 'idle' ? 'creature-mode-btn active' : 'creature-mode-btn';
+      btn.addEventListener('click', () => {
+        currentMode = modeKey;
+        controls.querySelectorAll('.creature-mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+      controls.appendChild(btn);
+    });
+  }
+
+  // Accumulated phase (matches game's JS-accumulated uPhase approach)
+  let phase = 0;
+  let lastTime = Date.now() * 0.001;
+  let rot = 0;
+  // Live amplitude/speed - lerped toward target for smooth transitions
+  let liveAmplitude = spec.modes.idle.amplitude;
+  let liveSpeed = spec.modes.idle.speed;
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const now = Date.now() * 0.001;
+    const dt = Math.min(now - lastTime, 0.05); // cap to avoid jumps
+    lastTime = now;
+
+    // Smooth lerp toward target mode values
+    const targetAmp = spec.modes[currentMode].amplitude;
+    const targetSpd = spec.modes[currentMode].speed;
+    const lerpRate = 1 - Math.pow(0.04, dt); // ~96% per second convergence
+    liveAmplitude += (targetAmp - liveAmplitude) * lerpRate;
+    liveSpeed += (targetSpd - liveSpeed) * lerpRate;
+
+    // Accumulate phase like the game does (speed * dt)
+    phase += liveSpeed * dt;
+
+    rot += 0.004;
+    camera.position.x = Math.sin(rot) * orbitRadius;
+    camera.position.z = Math.cos(rot) * orbitRadius;
+    camera.position.y = orbitRadius * 0.35;
+    camera.lookAt(lookTarget);
+
+    // JS vertex displacement  - matches SwimMaterial.js logic exactly
+    const dispIdx = spec.swimAxis < 0.5 ? 0 : 1;
+    for (let m = 0; m < swimMeshes.length; m++) {
+      const sm = swimMeshes[m];
+      const arr = sm.posAttr.array;
+      const orig = sm.origPositions;
+
+      for (let i = 0; i < sm.posAttr.count; i++) {
+        const ix = i * 3;
+        const z = orig[ix + 2];
+        const bodyRange = sm.zRange;
+
+        // Body coordinate: 0 = head, 1 = tail (inverted, matches game)
+        const body = bodyRange > 0.001
+          ? Math.max(0, Math.min(1, 1.0 - (z - sm.zMin) / bodyRange))
+          : 0.5;
+
+        // Head region samples wave at maskStart (rigid head)
+        const waveBody = Math.max(body, spec.maskStart);
+
+        // Amplitude ramp with head weighting
+        const rampRaw = (body - spec.maskStart) / 0.3;
+        const ramp = Math.max(0, Math.min(1, rampRaw));
+
+        // Eye lateral weight (simplified  - use Y or X distance from center)
+        const lateralIdx = spec.swimAxis < 0.5 ? 1 : 0; // perpendicular axis
+        const lateralOffset = Math.abs(orig[ix + lateralIdx]) / (bodyRange * 0.5 + 0.001);
+        const eyeWeight = Math.max(0, Math.min(1, lateralOffset * 3.0));
+        const headAmp = spec.maskFloor * eyeWeight;
+        const amp = headAmp + (1.0 - headAmp) * ramp;
+
+        // Phase: spatial from body, temporal from accumulated phase
+        const headDelay = (1.0 - ramp) * spec.headPhase;
+        const wavePhase = waveBody * spec.frequency * 6.2832 - phase + headDelay;
+        const wave = Math.sin(wavePhase) * liveAmplitude * amp;
+
+        // Copy original + apply displacement
+        arr[ix]     = orig[ix];
+        arr[ix + 1] = orig[ix + 1];
+        arr[ix + 2] = orig[ix + 2];
+        arr[ix + dispIdx] += wave;
+      }
+      sm.posAttr.needsUpdate = true;
+    }
+
+    renderer.render(scene, camera);
+  }
+  animate();
+}
+
+// Spawn individual creature viewers (using creature type keys matching SWIM_CONFIGS)
+createCreatureViewer('demo-3d-fish', 'fish');
+createCreatureViewer('demo-3d-dolphin', 'dolphin');
+createCreatureViewer('demo-3d-manatee', 'manatee');
+
+// ── (AI State Machine and Behavior FSM demos removed - content moved to Ecosystem page) ──
+// Fixed: flee radius & speeds now in proper pixel-space so the demo is lively.
+(function() {
+  const canvas = document.getElementById('demo-ai-machine');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  function resizeCanvas(reinit) {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = 400;
+    if (reinit) initCreatures();
+  }
+  resizeCanvas(false); // size canvas but don't init creatures yet
+
+  // Slider values map to pixel-space via a scale factor
+  const FLEE_PX = 60;   // 1.0 slider unit = 60px
+  const FISH_PX = 60;   // 1.0 slider unit = 60 px/sec
+  const DOLPH_PX = 55;  // 1.0 slider unit = 55 px/sec
+
+  const creatures = [];
+  const fishCount = 10;
+  const foodParticles = [];
+
+  function initCreatures() {
+    creatures.length = 0;
+    for (let i = 0; i < fishCount; i++) {
+      creatures.push({
+        type: 'fish',
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: 0, vy: 0,
+        heading: Math.random() * Math.PI * 2,
+        targetX: null, targetY: null,
+        state: 'forage',
+        fleeTimer: 0,
+        tickTimer: Math.random() * 0.06 // desync brain ticks
+      });
+    }
+    creatures.push({
+      type: 'dolphin',
+      x: canvas.width * 0.7,
+      y: canvas.height * 0.4,
+      vx: 0, vy: 0,
+      heading: Math.PI,
+      targetX: null, targetY: null,
+      state: 'search',
+      tickTimer: 0,
+      huntTarget: null
+    });
+
+    foodParticles.length = 0;
+    for (let i = 0; i < 12; i++) {
+      foodParticles.push({
+        x: 40 + Math.random() * (canvas.width - 80),
+        y: 40 + Math.random() * (canvas.height - 80)
+      });
+    }
+  }
+
+  initCreatures();
+  window.addEventListener('resize', () => resizeCanvas(true));
+  let lastFrameTime = Date.now();
+
+  function animate() {
+    const now = Date.now();
+    const dt = Math.min(0.033, (now - lastFrameTime) / 1000);
+    lastFrameTime = now;
+
+    const fleeRadius = parseFloat(document.getElementById('ctrl-flee').value) * FLEE_PX;
+    const fishSpeed = parseFloat(document.getElementById('ctrl-fish-speed').value) * FISH_PX;
+    const dolphinSpeed = parseFloat(document.getElementById('ctrl-dolphin-speed').value) * DOLPH_PX;
+    const huntMode = document.getElementById('ctrl-hunt').checked;
+
+    const dolphin = creatures[creatures.length - 1];
+
+    // ── Update fish ──
+    for (let c of creatures) {
+      if (c.type !== 'fish') continue;
+
+      c.tickTimer += dt;
+      if (c.tickTimer >= 0.06) {
+        c.tickTimer = 0;
+
+        // Check dolphin proximity (overrides food)
+        const dd = Math.hypot(dolphin.x - c.x, dolphin.y - c.y);
+        if (dd < fleeRadius && huntMode) {
+          c.state = 'flee';
+          c.fleeTimer = 0.5; // flee for 0.5s
+          const away = Math.atan2(c.y - dolphin.y, c.x - dolphin.x);
+          // Add randomness to scatter direction
+          c.heading = away + (Math.random() - 0.5) * 0.8;
+        } else if (c.fleeTimer <= 0) {
+          // Find nearest food
+          let nearest = null, nd = 250;
+          for (let food of foodParticles) {
+            const d = Math.hypot(food.x - c.x, food.y - c.y);
+            if (d < nd) { nearest = food; nd = d; }
+          }
+          if (nearest) {
+            c.targetX = nearest.x;
+            c.targetY = nearest.y;
+            c.state = 'forage';
+          } else {
+            // Wander
+            c.heading += (Math.random() - 0.5) * 0.4;
+            c.state = 'forage';
+          }
+        }
+      }
+
+      if (c.fleeTimer > 0) {
+        c.fleeTimer -= dt;
+        c.state = 'flee';
+        c.vx += (Math.cos(c.heading) * fishSpeed * 1.3 - c.vx) * 0.15;
+        c.vy += (Math.sin(c.heading) * fishSpeed * 1.3 - c.vy) * 0.15;
+      } else if (c.targetX !== null) {
+        const tgt = Math.atan2(c.targetY - c.y, c.targetX - c.x);
+        // Soft turn
+        let diff = tgt - c.heading;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        c.heading += diff * 0.12;
+        c.vx += (Math.cos(c.heading) * fishSpeed - c.vx) * 0.1;
+        c.vy += (Math.sin(c.heading) * fishSpeed - c.vy) * 0.1;
+
+        // Eat food within 8px
+        const fd = Math.hypot(c.targetX - c.x, c.targetY - c.y);
+        if (fd < 8) {
+          const idx = foodParticles.findIndex(f => f.x === c.targetX && f.y === c.targetY);
+          if (idx >= 0) {
+            // Respawn food elsewhere
+            foodParticles[idx].x = 40 + Math.random() * (canvas.width - 80);
+            foodParticles[idx].y = 40 + Math.random() * (canvas.height - 80);
+          }
+          c.targetX = null;
+        }
+      } else {
+        // Drift / wander
+        c.vx *= 0.96;
+        c.vy *= 0.96;
+      }
+
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      // Soft boundary bounce
+      if (c.x < 10) { c.x = 10; c.vx = Math.abs(c.vx); }
+      if (c.x > canvas.width - 10) { c.x = canvas.width - 10; c.vx = -Math.abs(c.vx); }
+      if (c.y < 10) { c.y = 10; c.vy = Math.abs(c.vy); }
+      if (c.y > canvas.height - 10) { c.y = canvas.height - 10; c.vy = -Math.abs(c.vy); }
+    }
+
+    // ── Update dolphin ──
+    if (huntMode) {
+      dolphin.tickTimer += dt;
+      if (dolphin.tickTimer >= 0.06) {
+        dolphin.tickTimer = 0;
+        // Find nearest fish
+        let nearest = null, nd = Infinity;
+        for (let f of creatures) {
+          if (f.type !== 'fish') continue;
+          const d = Math.hypot(f.x - dolphin.x, f.y - dolphin.y);
+          if (d < nd) { nearest = f; nd = d; }
+        }
+        dolphin.huntTarget = nearest;
+        if (nearest) {
+          dolphin.state = 'hunt';
+          const tgt = Math.atan2(nearest.y - dolphin.y, nearest.x - dolphin.x);
+          let diff = tgt - dolphin.heading;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          dolphin.heading += diff * 0.2;
+        } else {
+          dolphin.state = 'search';
+          dolphin.heading += (Math.random() - 0.5) * 0.3;
+        }
+      }
+      dolphin.vx += (Math.cos(dolphin.heading) * dolphinSpeed - dolphin.vx) * 0.12;
+      dolphin.vy += (Math.sin(dolphin.heading) * dolphinSpeed - dolphin.vy) * 0.12;
+    } else {
+      // Idle  - drift slowly
+      dolphin.state = 'idle';
+      dolphin.vx *= 0.97;
+      dolphin.vy *= 0.97;
+    }
+    dolphin.x += dolphin.vx * dt;
+    dolphin.y += dolphin.vy * dt;
+    if (dolphin.x < 10) { dolphin.x = 10; dolphin.vx = Math.abs(dolphin.vx); }
+    if (dolphin.x > canvas.width - 10) { dolphin.x = canvas.width - 10; dolphin.vx = -Math.abs(dolphin.vx); }
+    if (dolphin.y < 10) { dolphin.y = 10; dolphin.vy = Math.abs(dolphin.vy); }
+    if (dolphin.y > canvas.height - 10) { dolphin.y = canvas.height - 10; dolphin.vy = -Math.abs(dolphin.vy); }
+
+    // ── Render ──
+    ctx.fillStyle = 'rgba(10, 22, 40, 1)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < canvas.width; x += 40) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += 40) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    }
+
+    // Food particles (warm dots)
+    for (let food of foodParticles) {
+      ctx.fillStyle = 'rgba(255, 120, 80, 0.7)';
+      ctx.beginPath();
+      ctx.arc(food.x, food.y, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      // glow
+      ctx.fillStyle = 'rgba(255, 120, 80, 0.1)';
+      ctx.beginPath();
+      ctx.arc(food.x, food.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Dolphin flee radius (soft glow circle)
+    if (huntMode) {
+      const grad = ctx.createRadialGradient(dolphin.x, dolphin.y, fleeRadius * 0.6, dolphin.x, dolphin.y, fleeRadius);
+      grad.addColorStop(0, 'rgba(255, 100, 80, 0)');
+      grad.addColorStop(1, 'rgba(255, 100, 80, 0.06)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(dolphin.x, dolphin.y, fleeRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 100, 80, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Fish
+    for (let c of creatures) {
+      if (c.type !== 'fish') continue;
+      const fleeing = c.state === 'flee';
+      const col = fleeing ? 'rgba(255, 160, 80, 0.9)' : 'rgba(80, 230, 140, 0.85)';
+
+      // Body
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Direction line
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y);
+      ctx.lineTo(c.x + Math.cos(c.heading) * 10, c.y + Math.sin(c.heading) * 10);
+      ctx.stroke();
+
+      // Tiny state label
+      ctx.fillStyle = fleeing ? 'rgba(255, 160, 80, 0.5)' : 'rgba(80, 230, 140, 0.4)';
+      ctx.font = '9px JetBrains Mono';
+      ctx.textAlign = 'left';
+      ctx.fillText(fleeing ? 'Flee!' : 'Forage', c.x + 10, c.y - 6);
+    }
+
+    // Dolphin
+    ctx.fillStyle = 'rgba(80, 180, 255, 0.95)';
+    ctx.beginPath();
+    ctx.arc(dolphin.x, dolphin.y, 7, 0, Math.PI * 2);
+    ctx.fill();
+    // glow
+    ctx.fillStyle = 'rgba(80, 180, 255, 0.08)';
+    ctx.beginPath();
+    ctx.arc(dolphin.x, dolphin.y, 16, 0, Math.PI * 2);
+    ctx.fill();
+    // direction
+    ctx.strokeStyle = 'rgba(80, 180, 255, 0.7)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(dolphin.x, dolphin.y);
+    ctx.lineTo(dolphin.x + Math.cos(dolphin.heading) * 14, dolphin.y + Math.sin(dolphin.heading) * 14);
+    ctx.stroke();
+    // label
+    ctx.fillStyle = 'rgba(80, 180, 255, 0.5)';
+    ctx.font = '10px JetBrains Mono';
+    ctx.textAlign = 'left';
+    ctx.fillText(dolphin.state === 'hunt' ? 'Hunting' : dolphin.state === 'search' ? 'Searching' : 'Idle', dolphin.x + 14, dolphin.y - 8);
+
+    requestAnimationFrame(animate);
+  }
+
+  document.getElementById('ctrl-flee').addEventListener('input', (e) => {
+    document.getElementById('val-flee').textContent = e.target.value;
+  });
+  document.getElementById('ctrl-fish-speed').addEventListener('input', (e) => {
+    document.getElementById('val-fish-speed').textContent = e.target.value;
+  });
+  document.getElementById('ctrl-dolphin-speed').addEventListener('input', (e) => {
+    document.getElementById('val-dolphin-speed').textContent = e.target.value;
+  });
+  document.getElementById('ctrl-hunt').addEventListener('change', (e) => {
+    document.getElementById('val-hunt').textContent = e.target.checked ? 'On' : 'Off';
+  });
+
+  animate();
+})();
+
+// ── Demo 2: Behavior FSM Diagram ──
+(function() {
+  const canvas = document.getElementById('demo-behavior-fsm');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  function resizeCanvas() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = 200;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  let startTime = Date.now();
+  let animationId;
+
+  function animate() {
+    const now = Date.now();
+    const elapsed = (now - startTime) * 0.001;
+
+    ctx.fillStyle = 'rgba(10, 22, 40, 1)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.font = 'bold 12px JetBrains Mono';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+
+    const stateX = [100, 300, 500];
+    const stateY = 100;
+    const states = ['FORAGE', 'DETECT', 'FLEE'];
+    const stateColors = ['rgba(100, 200, 100, 0.8)', 'rgba(200, 200, 100, 0.8)', 'rgba(255, 100, 100, 0.8)'];
+
+    // Draw states
+    for (let i = 0; i < states.length; i++) {
+      ctx.fillStyle = stateColors[i];
+      ctx.fillRect(stateX[i] - 35, stateY - 25, 70, 50);
+
+      ctx.fillStyle = 'rgba(10, 22, 40, 1)';
+      ctx.textAlign = 'center';
+      ctx.fillText(states[i], stateX[i], stateY + 8);
+    }
+
+    // Draw arrows
+    ctx.strokeStyle = 'rgba(255, 150, 100, 0.7)';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(255, 150, 100, 0.7)';
+
+    // FORAGE -> DETECT
+    ctx.beginPath();
+    ctx.moveTo(stateX[0] + 35, stateY);
+    ctx.lineTo(stateX[1] - 35, stateY);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(stateX[1] - 35, stateY);
+    ctx.lineTo(stateX[1] - 25, stateY - 5);
+    ctx.lineTo(stateX[1] - 25, stateY + 5);
+    ctx.closePath();
+    ctx.fill();
+
+    // DETECT -> FLEE
+    ctx.strokeStyle = 'rgba(255, 100, 100, 0.8)';
+    ctx.lineWidth = 2.5;
+    ctx.fillStyle = 'rgba(255, 100, 100, 0.8)';
+    ctx.beginPath();
+    ctx.moveTo(stateX[1] + 35, stateY);
+    ctx.lineTo(stateX[2] - 35, stateY);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(stateX[2] - 35, stateY);
+    ctx.lineTo(stateX[2] - 25, stateY - 5);
+    ctx.lineTo(stateX[2] - 25, stateY + 5);
+    ctx.closePath();
+    ctx.fill();
+
+    // FLEE -> FORAGE (loop back)
+    ctx.strokeStyle = 'rgba(150, 200, 255, 0.7)';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(150, 200, 255, 0.7)';
+    const loopY = stateY + 50;
+    ctx.beginPath();
+    ctx.moveTo(stateX[2], stateY + 25);
+    ctx.bezierCurveTo(stateX[2] + 50, loopY, stateX[0] - 50, loopY, stateX[0], stateY + 25);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(stateX[0], stateY + 25);
+    ctx.lineTo(stateX[0] + 6, stateY + 32);
+    ctx.lineTo(stateX[0] - 4, stateY + 30);
+    ctx.closePath();
+    ctx.fill();
+
+    // Labels on arrows
+    ctx.font = '10px JetBrains Mono';
+    ctx.fillStyle = 'rgba(255, 150, 100, 1)';
+    ctx.textAlign = 'center';
+    ctx.fillText('food found', (stateX[0] + stateX[1]) / 2, stateY - 15);
+    ctx.fillStyle = 'rgba(255, 100, 100, 1)';
+    ctx.fillText('predator near', (stateX[1] + stateX[2]) / 2, stateY - 15);
+    ctx.fillStyle = 'rgba(150, 200, 255, 1)';
+    ctx.fillText('predator gone', (stateX[0] + stateX[2]) / 2, loopY + 15);
+
+    animationId = requestAnimationFrame(animate);
+  }
+
+  animate();
+})();
+
+// ── Demo 3: Thrust vs Velocity (interactive) ──
+(function() {
+  const canvas = document.getElementById('demo-velocity-lerp');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  const throttleSlider = document.getElementById('ctrl-thrust-throttle');
+  const dragSlider = document.getElementById('ctrl-thrust-drag');
+  const throttleVal = document.getElementById('val-thrust-throttle');
+  const dragVal = document.getElementById('val-thrust-drag');
+  const resetBtn = document.getElementById('btn-thrust-reset');
+
+  function resizeCanvas() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = 350;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  // Fish state
+  let fishX = 60;
+  let fishVel = 0;
+  const accelRate = 4.0; // units/s^2
+  const baseSpeed = 200; // px/s at throttle 1x
+  let prevThrottle = 0;
+  let lastTime = Date.now() * 0.001;
+
+  // History for graph
+  const history = [];
+  const historyLen = 300;
+
+  // Tail wiggle phase
+  let tailPhase = 0;
+
+  function reset() {
+    fishX = 60;
+    fishVel = 0;
+    history.length = 0;
+    prevThrottle = 0;
+    lastTime = Date.now() * 0.001;
+  }
+  if (resetBtn) resetBtn.addEventListener('click', reset);
+  if (throttleSlider) throttleSlider.addEventListener('input', () => {
+    throttleVal.textContent = parseFloat(throttleSlider.value).toFixed(1) + 'x';
+  });
+  if (dragSlider) dragSlider.addEventListener('input', () => {
+    dragVal.textContent = parseFloat(dragSlider.value).toFixed(3);
+  });
+
+  function drawFish(x, y, vel, thrust) {
+    const size = 18;
+    const angle = 0; // facing right
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Thrust flame when engine is on
+    if (thrust > 0.05) {
+      const flameLen = 8 + thrust * 12;
+      const flicker = Math.sin(Date.now() * 0.02) * 2;
+      ctx.fillStyle = 'rgba(255, 120, 30, ' + (0.4 + thrust * 0.3) + ')';
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.5, -3);
+      ctx.lineTo(-size * 0.5 - flameLen + flicker, 0);
+      ctx.lineTo(-size * 0.5, 3);
+      ctx.closePath();
+      ctx.fill();
+      // Inner flame
+      ctx.fillStyle = 'rgba(255, 220, 80, ' + (0.3 + thrust * 0.2) + ')';
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.5, -1.5);
+      ctx.lineTo(-size * 0.5 - flameLen * 0.6, 0);
+      ctx.lineTo(-size * 0.5, 1.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Body - simple fish shape with tail wiggle
+    const wiggle = Math.sin(tailPhase) * 4 * Math.min(1, vel / 80);
+    ctx.fillStyle = '#f0a030';
+    ctx.strokeStyle = 'rgba(255, 180, 60, 0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    // Nose
+    ctx.moveTo(size * 0.7, 0);
+    // Top arc
+    ctx.quadraticCurveTo(size * 0.3, -size * 0.4, -size * 0.2, -size * 0.25);
+    // Tail top
+    ctx.lineTo(-size * 0.5, -size * 0.4 + wiggle);
+    // Tail notch
+    ctx.lineTo(-size * 0.35, wiggle * 0.5);
+    // Tail bottom
+    ctx.lineTo(-size * 0.5, size * 0.4 + wiggle);
+    // Bottom arc
+    ctx.lineTo(-size * 0.2, size * 0.25);
+    ctx.quadraticCurveTo(size * 0.3, size * 0.4, size * 0.7, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Eye
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.arc(size * 0.35, -size * 0.05, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function animate() {
+    const now = Date.now() * 0.001;
+    const dt = Math.min(now - lastTime, 0.05);
+    lastTime = now;
+
+    const throttle = parseFloat(throttleSlider.value);
+    const dragRaw = parseFloat(dragSlider.value);
+    // Invert: low slider = low drag = long coast, high slider = high drag = quick stop
+    const retention = 1.89 - dragRaw;
+
+    // Physics: accelerate toward target, apply drag
+    const targetVel = throttle * baseSpeed;
+    if (throttle > 0.01) {
+      // Accelerate toward target
+      const diff = targetVel - fishVel;
+      fishVel += diff * accelRate * dt;
+    }
+    // Always apply drag (retention is per-frame velocity multiplier)
+    fishVel *= Math.pow(retention, dt * 60);
+
+    // Clamp tiny values
+    if (Math.abs(fishVel) < 0.1) fishVel = 0;
+
+    // Move fish
+    fishX += fishVel * dt;
+
+    // Wrap around
+    if (fishX > canvas.width + 30) fishX = -20;
+    if (fishX < -30) fishX = canvas.width + 20;
+
+    // Tail wiggle based on velocity
+    tailPhase += dt * (3 + fishVel * 0.04);
+
+    // Record history
+    history.push({ vel: fishVel, throttle: throttle, time: now });
+    while (history.length > historyLen) history.shift();
+
+    // ── DRAW ──
+    ctx.fillStyle = 'rgba(10, 22, 40, 1)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // ── TOP: Fish swimming lane ──
+    const laneH = 100;
+    const laneY = laneH / 2 + 10;
+
+    // Lane background
+    ctx.fillStyle = 'rgba(10, 30, 55, 0.6)';
+    ctx.fillRect(0, 0, canvas.width, laneH);
+
+    // Speed lines (motion streaks)
+    if (fishVel > 10) {
+      const streakAlpha = Math.min(0.3, fishVel / 500);
+      ctx.strokeStyle = 'rgba(150, 200, 255, ' + streakAlpha + ')';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        const sy = laneY - 15 + Math.random() * 30;
+        const sx = fishX - 25 - Math.random() * fishVel * 0.3;
+        const sl = 5 + fishVel * 0.05;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx - sl, sy);
+        ctx.stroke();
+      }
+    }
+
+    // Draw the fish
+    drawFish(fishX, laneY, fishVel, throttle);
+
+    // Velocity readout
+    ctx.fillStyle = 'rgba(255, 200, 100, 0.9)';
+    ctx.font = '12px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('vel: ' + (fishVel / baseSpeed).toFixed(2) + 'x', 10, laneH - 8);
+
+    // Thrust indicator
+    ctx.fillStyle = throttle > 0.01 ? 'rgba(100, 220, 100, 0.8)' : 'rgba(255, 100, 80, 0.8)';
+    ctx.fillText('thrust: ' + (throttle > 0.01 ? 'ON ' + throttle.toFixed(1) + 'x' : 'OFF'), canvas.width - 150, laneH - 8);
+
+    // ── BOTTOM: Graph ──
+    const graphTop = laneH + 15;
+    const graphH = canvas.height - graphTop - 35;
+    const graphLeft = 50;
+    const graphRight = canvas.width - 15;
+    const graphW = graphRight - graphLeft;
+
+    // Graph background
+    ctx.fillStyle = 'rgba(5, 15, 30, 0.5)';
+    ctx.fillRect(graphLeft, graphTop, graphW, graphH);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 4; i++) {
+      const y = graphTop + graphH * (1 - i / 4);
+      ctx.beginPath();
+      ctx.moveTo(graphLeft, y);
+      ctx.lineTo(graphRight, y);
+      ctx.stroke();
+    }
+
+    // Y labels
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    const maxV = 2.5;
+    for (let i = 0; i <= 4; i++) {
+      const val = (i / 4 * maxV).toFixed(1);
+      const y = graphTop + graphH * (1 - i / 4);
+      ctx.fillText(val + 'x', graphLeft - 5, y + 3);
+    }
+
+    // Y axis title
+    ctx.save();
+    ctx.translate(12, graphTop + graphH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.fillText('speed', 0, 0);
+    ctx.restore();
+
+    // Draw history curves
+    if (history.length > 1) {
+      const step = graphW / historyLen;
+
+      // Throttle curve (teal, filled area)
+      ctx.fillStyle = 'rgba(79, 195, 247, 0.12)';
+      ctx.beginPath();
+      ctx.moveTo(graphLeft, graphTop + graphH);
+      for (let i = 0; i < history.length; i++) {
+        const x = graphLeft + i * step;
+        const y = graphTop + graphH * (1 - history[i].throttle / maxV);
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(graphLeft + (history.length - 1) * step, graphTop + graphH);
+      ctx.closePath();
+      ctx.fill();
+
+      // Throttle line
+      ctx.strokeStyle = 'rgba(79, 195, 247, 0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      for (let i = 0; i < history.length; i++) {
+        const x = graphLeft + i * step;
+        const y = graphTop + graphH * (1 - history[i].throttle / maxV);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Velocity curve (orange, solid)
+      ctx.strokeStyle = 'rgba(255, 180, 60, 0.9)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let i = 0; i < history.length; i++) {
+        const x = graphLeft + i * step;
+        const y = graphTop + graphH * (1 - (history[i].vel / baseSpeed) / maxV);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Legend
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    // Velocity
+    ctx.strokeStyle = 'rgba(255, 180, 60, 0.9)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(graphLeft + 5, graphTop + graphH + 15); ctx.lineTo(graphLeft + 25, graphTop + graphH + 15); ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 200, 100, 0.7)';
+    ctx.fillText('velocity', graphLeft + 30, graphTop + graphH + 19);
+    // Throttle
+    ctx.strokeStyle = 'rgba(79, 195, 247, 0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(graphLeft + 120, graphTop + graphH + 15); ctx.lineTo(graphLeft + 140, graphTop + graphH + 15); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(79, 195, 247, 0.7)';
+    ctx.fillText('throttle', graphLeft + 145, graphTop + graphH + 19);
+    // Drag label
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.textAlign = 'right';
+    ctx.fillText('drag = ' + dragRaw.toFixed(3) + '/frame', graphRight, graphTop + graphH + 19);
+
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+})();
+
+// ── Demo 4: Oxygen Gauge Diagram ──
+(function() {
+  const canvas = document.getElementById('demo-oxygen-gauge');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  function resizeCanvas() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = 200;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  let startTime = Date.now();
+  let animationId;
+  let oxygenLevel = 1.0;
+  let isUnderwater = true;
+
+  function animate() {
+    const now = Date.now();
+    const elapsed = (now - startTime) * 0.001;
+
+    ctx.fillStyle = 'rgba(10, 22, 40, 1)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Cycle: underwater for 6 seconds, surface for 2 seconds
+    const cycle = elapsed % 8;
+    isUnderwater = cycle < 6;
+
+    // Update oxygen
+    if (isUnderwater) {
+      oxygenLevel -= 0.0167 * (1000 / 60); // ~60 second tank
+    } else {
+      oxygenLevel = Math.min(1.0, oxygenLevel + 0.25 * (1000 / 60)); // Fast refill
+    }
+    oxygenLevel = Math.max(0, Math.min(1.0, oxygenLevel));
+
+    // Draw gauge background
+    const gaugeX = canvas.width * 0.5 - 150;
+    const gaugeY = 80;
+    const gaugeW = 300;
+    const gaugeH = 40;
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.fillRect(gaugeX, gaugeY, gaugeW, gaugeH);
+
+    // Draw filled portion
+    let fillColor;
+    if (oxygenLevel > 0.3) {
+      fillColor = 'rgba(100, 220, 100, 0.8)'; // Green
+    } else if (oxygenLevel > 0.1) {
+      fillColor = 'rgba(255, 200, 50, 0.8)'; // Yellow
+    } else {
+      fillColor = 'rgba(255, 80, 80, 0.8)'; // Red
+    }
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(gaugeX + 2, gaugeY + 2, (gaugeW - 4) * oxygenLevel, gaugeH - 4);
+
+    // Draw border
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(gaugeX, gaugeY, gaugeW, gaugeH);
+
+    // Threshold markers
+    ctx.strokeStyle = 'rgba(255, 150, 100, 0.6)';
+    ctx.lineWidth = 1;
+    // 30% threshold
+    ctx.beginPath();
+    ctx.moveTo(gaugeX + (gaugeW - 4) * 0.3 + 2, gaugeY);
+    ctx.lineTo(gaugeX + (gaugeW - 4) * 0.3 + 2, gaugeY + gaugeH);
+    ctx.stroke();
+    // 10% threshold (critical)
+    ctx.strokeStyle = 'rgba(255, 80, 80, 0.8)';
+    ctx.beginPath();
+    ctx.moveTo(gaugeX + (gaugeW - 4) * 0.1 + 2, gaugeY);
+    ctx.lineTo(gaugeX + (gaugeW - 4) * 0.1 + 2, gaugeY + gaugeH);
+    ctx.stroke();
+
+    // Labels
+    ctx.font = '11px JetBrains Mono';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.textAlign = 'center';
+    ctx.fillText(isUnderwater ? 'UNDERWATER (depleting)' : 'AT SURFACE (refilling)', canvas.width * 0.5, 50);
+
+    // Percentage display
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.font = 'bold 14px JetBrains Mono';
+    ctx.fillText((oxygenLevel * 100).toFixed(0) + '%', canvas.width * 0.5, 160);
+
+    // Legend
+    ctx.font = '9px JetBrains Mono';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(100, 220, 100, 1)';
+    ctx.fillText('Normal (>30%)', gaugeX, gaugeY - 15);
+    ctx.fillStyle = 'rgba(255, 200, 50, 1)';
+    ctx.fillText('Urgent (10-30%)', gaugeX + 110, gaugeY - 15);
+    ctx.fillStyle = 'rgba(255, 80, 80, 1)';
+    ctx.fillText('Critical (<10%)', gaugeX + 230, gaugeY - 15);
+
+    animationId = requestAnimationFrame(animate);
+  }
+
+  animate();
+})();
+*/
+</script>
+
+</body>
+</html>

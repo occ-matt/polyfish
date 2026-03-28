@@ -1,0 +1,27 @@
+{
+  "name": "polyfish-threejs",
+  "version": "0.1.0",
+  "description": "PolyFish underwater ecosystem simulation - Three.js port",
+  "license": "MIT",
+  "author": "Matt Scott",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "jolt-physics": "^1.0.0",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "vite": "^6.0.0",
+    "vitest": "^4.1.0"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.35.0"
+  }
+}
