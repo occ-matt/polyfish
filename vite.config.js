@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig({
   root: '.',
   publicDir: 'assets',
+  plugins: [basicSsl()],
   server: {
     host: true,   // listen on 0.0.0.0 so LAN devices can connect
     port: 3000,
