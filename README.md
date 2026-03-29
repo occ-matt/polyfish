@@ -32,8 +32,9 @@ When the ecosystem collapses (all fish die), the simulation restarts with a new 
 - Procedural swim animation via vertex shaders
 - Documentary-style auto-camera with depth-of-field
 - Underwater caustics and volumetric god rays
-- WebXR support with hand tracking (Quest 3)
+- WebXR support with hand tracking (Quest 3), smooth locomotion, and physics-based food throwing
 - Narrated introduction sequence with ambient audio
+- Cinematic end credits sequence (DOM-based, cross-platform)
 
 ## Modes
 
@@ -94,6 +95,20 @@ src/
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for a deep dive into the architecture, physics integration, and entity lifecycle.
+
+## VR (WebXR)
+
+PolyFish supports VR on Quest headsets via WebXR. The dev server uses HTTPS (via `@vitejs/plugin-basic-ssl`) which is required for WebXR.
+
+**Locomotion**: Left thumbstick moves in the direction the left controller points. Right thumbstick smooth-turns the rig.
+
+**Feeding**: Hold the trigger to spawn food in your hand, release to throw. Both controllers work independently.
+
+**Food hold mechanics**: Food uses a lerp-based hold (not scene-graph parenting) for a weighted, underwater feel. The food mesh stays in the scene and lerps toward the controller grip position each frame. Since individual food meshes are never added to the scene directly (all food renders via a shared `InstancedMesh`), held food goes through the same instanced rendering path as free-floating food.
+
+**Throwing**: On trigger release, the controller's `linearVelocity` from the XR API is read and scaled to 0.4× (raw velocity is too fast for underwater). Because smooth turn rotates the Three.js rig rather than the XR reference space, the velocity is rotated by the rig's quaternion to get the correct world-space throw direction. Angular velocity from the controller is carried through as food spin for visual continuity.
+
+**End credits in VR**: When the ecosystem collapses, the scene fades to black via a tint sphere, then the XR session is ended and DOM-based credits play on the flat screen.
 
 ## Development
 
