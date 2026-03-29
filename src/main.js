@@ -631,6 +631,30 @@ async function init() {
         return;
       }
 
+      // Trigger end sequence (0 key — dev only)
+      if (e.key === '0' && !GS.endSequenceActive) {
+        console.log('[PolyFish] DEV: Triggering end sequence');
+        GS.endSequenceActive = true;
+        GS.stageRunning = false;
+        if (audioManager) {
+          audioManager.playSFXVariant('gameOver');
+          audioManager.fadeMusic(0, 3);
+          audioManager.stopAmbience();
+        }
+        const popCounter = document.getElementById('population-counter');
+        if (popCounter) popCounter.classList.add('hud-hidden');
+        if (vrEndScreen) {
+          vrEndScreen.start();
+          setTimeout(() => audioManager?.playCreditsTrack(), 11000);
+        }
+        // Desktop: release pointer lock but keep camera still so
+        // the VR end screen panel stays in view
+        if (cameraController) {
+          if (document.pointerLockElement) document.exitPointerLock();
+        }
+        return;
+      }
+
       // Mode switching — skip if user is typing in an input field
       if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
         if (e.key === '1') { modeManager.switchMode('narrative', modeContext); return; }
@@ -960,6 +984,8 @@ function spawnInitialSeed() {
 
 // ── Game Loop ──────────────────────────────────────────────────
 let _diagFrameCount = 0;
+let perfTimer = 0;
+let perfFrameCount = 0;
 function gameLoop() {
   try {
   const rawDt = Math.min(clock.getDelta(), 0.1);

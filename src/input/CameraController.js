@@ -66,6 +66,7 @@ export class CameraController {
 
     // ── Cinematic screensaver state ──
     this.ss = {
+      target: new THREE.Vector3(0, -7, 0),
       smoothLookAt: new THREE.Vector3(0, -7, 0),
 
       // Documentary system modules

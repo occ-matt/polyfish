@@ -63,6 +63,7 @@ PolyFish_ThreeJS/
 │   │   ├── MarineSnow.js            # Floating particle background
 │   │   ├── ParticleBurst.js         # Eating/death effect particles
 │   │   ├── FadeOverlay.js           # Fade-to-black transitions
+│   │   ├── VREndScreen.js           # End-of-simulation credits sequence (DOM overlay + VR 3D panel)
 │   │   ├── CausticShader.js         # Procedural underwater caustic lighting
 │   │   └── WaterSurface.js          # GPU wave animation for ocean surface
 │   ├── camera/
@@ -143,12 +144,14 @@ When the ecosystem crashes (all fish eaten, zero population):
    - Removes meshes from scene
    - Clears arrays
 3. **Audio stop**: `stopAll()` kills audio sources with `onended=null` to prevent ghost callbacks
-3. **Death message**: Display "extinction" narration overlay (fade to black)
-4. **Reconstruct**: Call `initPools()` to rebuild fresh pools
-5. **Restart music**: `restartMusic()` fades in new ambience
-6. **Fade in**: Restore viewport
+4. **End sequence** (`VREndScreen`): Cinematic credits sequence with phased transitions:
+   - Desktop/mobile: DOM overlay with CSS-based scrolling credits over a black fade
+   - VR: World-space 3D panel (canvas texture) placed 5m in front of the user's gaze
+   - Phases: `stopping` → `fading` (scene darkens to ~88%) → `reveal` (credits fade in) → `scrolling` (film-style upward scroll) → `finale` (fade to full black) → `done` (page reload)
+   - Dev shortcut: Press `0` in dev mode (`?dev=true`) to trigger immediately
+5. **Page reload**: After credits complete, the page reloads to restart fresh
 
-Triggered by `PopulationMonitor` when active creature count reaches 0. Bound to Backspace key in Narrative mode.
+Triggered by `PopulationMonitor` when active creature count reaches 0. Dev trigger bound to `0` key in dev mode.
 
 ### Configuration System (config.js)
 
@@ -736,6 +739,7 @@ Other keyboard shortcuts:
 - **1/2/3**: Switch modes (Narrative / Viewer / Editor)
 - **`+` or `=`**: Cycle time scale (1x → 3x → 5x → 10x → 1x)
 - **Backspace** (Narrative mode): Manual ecosystem restart
+- **0** (dev mode only): Trigger end credits sequence immediately
 - **Tab**: Toggle camera mode (FPS ↔ Screensaver)
 - **G** (screensaver): Cycle grid overlay (off → thirds → golden → center)
 - **I** (screensaver): Toggle debug HUD (shot type, phase, velocity)
