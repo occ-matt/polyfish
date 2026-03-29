@@ -844,7 +844,7 @@ export class XRManager {
         baseVelocity.applyQuaternion(this.rig.quaternion);
 
         // Scale down — raw XR velocity feels too hot for underwater food tossing
-        baseVelocity.multiplyScalar(0.6);
+        baseVelocity.multiplyScalar(0.4);
 
         throwForce = baseVelocity;
         throwForce.y += this.floatUp;
