@@ -19,6 +19,8 @@ const CREDITS_HTML = `
 <div class="end-death-msg">The PolyFish have died.</div>
 <div class="end-death-line"></div>
 <div class="end-credits-spacer-xl"></div>
+<div class="end-credits-spacer-xl"></div>
+<div class="end-credits-spacer-xl"></div>
 <div class="end-logo">PolyFish</div>
 <div class="end-subtitle">REMASTERED</div>
 <div class="end-credits-spacer-xl"></div>
@@ -317,7 +319,7 @@ export class VREndScreen {
       case 'reveal': {
         const t = Math.min(this._timer / 2.0, 1);
         this._scrollContainer.style.opacity = t * t;
-        if (this._timer > 4.5) {
+        if (this._timer > 3.0) {
           this._scrollContainer.style.opacity = 1;
           this._phase = 'scrolling';
           this._timer = 0;
