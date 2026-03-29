@@ -37,8 +37,12 @@ export const TRANSFORM_BUFFER_FLOATS = CONTROL_FLOATS + MAX_BODIES * FLOATS_PER_
 /** Bytes for transform buffer */
 export const TRANSFORM_BUFFER_BYTES = TRANSFORM_BUFFER_FLOATS * 4;
 
-/** Maximum commands per frame */
-export const MAX_COMMANDS = 512;
+/** Maximum commands per frame.
+ *  Each food pushes 2 commands (setVelocity + setPosition) per frame,
+ *  plus creatures, seeds, and player.  With full plant populations
+ *  producing food, 512 overflows.  2048 gives 4× headroom.  Cost:
+ *  2048 × 8 floats × 4 bytes = 64 KB — negligible. */
+export const MAX_COMMANDS = 2048;
 
 /** Floats per command */
 export const FLOATS_PER_COMMAND = 8;  // type(1) + slot(1) + data(6)
@@ -98,7 +102,7 @@ export function writeCommand(commands, index, type, slot, f0 = 0, f1 = 0, f2 = 0
 /**
  * Create the shared buffers for physics communication.
  * @returns {{ transformSAB: SharedArrayBuffer, commandSAB: SharedArrayBuffer,
- *             transforms: Float32Array, commands: Float32Array }}
+ *             transforms: Float32Array, control: Int32Array, commands: Float32Array }}
  */
 export function createPhysicsBuffers() {
   const transformSAB = new SharedArrayBuffer(TRANSFORM_BUFFER_BYTES);
@@ -108,6 +112,13 @@ export function createPhysicsBuffers() {
     transformSAB,
     commandSAB,
     transforms: new Float32Array(transformSAB),
+    // Int32Array view over the control region for Atomics (memory barriers).
+    // Indices 0-3 map to the same bytes as transforms[0]-transforms[3]:
+    //   control[0] = CTRL_STEP_REQUESTED
+    //   control[1] = CTRL_STEP_COMPLETE
+    //   control[2] = CTRL_DT      (use transforms[] for float reads)
+    //   control[3] = CTRL_COMMAND_COUNT (integer, safe via either view)
+    control: new Int32Array(transformSAB, 0, CONTROL_FLOATS),
     commands: new Float32Array(commandSAB),
   };
 }

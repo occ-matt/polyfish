@@ -19,6 +19,7 @@
 import joltWasmUrl from 'jolt-physics/jolt-physics.wasm.wasm?url';
 import {
   MAX_BODIES,
+  MAX_COMMANDS,
   FLOATS_PER_COMMAND,
   CTRL_STEP_REQUESTED,
   CTRL_STEP_COMPLETE,
@@ -45,7 +46,8 @@ export class PhysicsProxy {
     this._worker = null;
 
     /** SharedArrayBuffer views */
-    this._transforms = null;  // Float32Array
+    this._transforms = null;  // Float32Array (positions, rotations, velocities)
+    this._control = null;     // Int32Array  (control flags — for Atomics)
     this._commands = null;    // Float32Array
     this._transformSAB = null;
     this._commandSAB = null;
@@ -106,6 +108,7 @@ export class PhysicsProxy {
     this._transformSAB = buffers.transformSAB;
     this._commandSAB = buffers.commandSAB;
     this._transforms = buffers.transforms;
+    this._control = buffers.control;
     this._commands = buffers.commands;
 
     // Create worker
@@ -402,7 +405,7 @@ export class PhysicsProxy {
 
   /** Write a command to the shared command buffer */
   _writeCommand(type, slot, f0 = 0, f1 = 0, f2 = 0, f3 = 0, f4 = 0, f5 = 0) {
-    if (this._commandCount >= 512) {
+    if (this._commandCount >= MAX_COMMANDS) {
       console.warn('[PhysicsProxy] Command buffer full!');
       return;
     }
@@ -428,13 +431,16 @@ export class PhysicsProxy {
    */
   step(dt) {
     if (this.useWorker) {
-      // Write command count and dt
+      // Write command count and dt (float — use transforms view)
       this._transforms[CTRL_COMMAND_COUNT] = this._commandCount;
       this._transforms[CTRL_DT] = dt;
 
-      // Signal worker to step
-      this._transforms[CTRL_STEP_COMPLETE] = 0;
-      this._transforms[CTRL_STEP_REQUESTED] = 1;
+      // Signal worker to step.
+      // Atomics.store provides a memory barrier: all writes above are
+      // visible to the worker before it sees STEP_REQUESTED = 1.
+      Atomics.store(this._control, CTRL_STEP_COMPLETE, 0);
+      Atomics.store(this._control, CTRL_STEP_REQUESTED, 1);
+      Atomics.notify(this._control, CTRL_STEP_REQUESTED);
 
       // Reset command buffer for next frame
       this._commandCount = 0;
@@ -450,18 +456,20 @@ export class PhysicsProxy {
    */
   isStepComplete() {
     if (!this.useWorker) return true;
-    return this._transforms[CTRL_STEP_COMPLETE] === 1;
+    return Atomics.load(this._control, CTRL_STEP_COMPLETE) === 1;
   }
 
   /**
    * Blocking wait for step completion (for compatibility with sync code).
-   * In practice, the worker should finish before the next frame at 90fps.
+   * Uses Atomics.load for the memory barrier — ensures all transform
+   * data written by the worker is visible once the flag reads as 1.
    */
   waitForStep() {
     if (!this.useWorker) return;
-    // Spin-wait (should be very brief — worker step takes <1ms for ~200 bodies)
-    while (this._transforms[CTRL_STEP_COMPLETE] !== 1) {
-      // Busy wait — acceptable because the wait is typically <1ms
+    // Spin-wait with Atomics.load for acquire semantics on ARM.
+    // The worker step typically takes <1ms for ~200 bodies.
+    while (Atomics.load(this._control, CTRL_STEP_COMPLETE) !== 1) {
+      // Busy wait
     }
   }
 

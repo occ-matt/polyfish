@@ -318,9 +318,9 @@ let running = false;
 function runLoop() {
   if (!running) return;
 
-  // Check if main thread requested a step
-  if (transforms[CTRL_STEP_REQUESTED] === 1) {
-    transforms[CTRL_STEP_REQUESTED] = 0;
+  // Check if main thread requested a step (Atomics.load for acquire barrier)
+  if (Atomics.load(controlInt32, CTRL_STEP_REQUESTED) === 1) {
+    Atomics.store(controlInt32, CTRL_STEP_REQUESTED, 0);
 
     const dt = transforms[CTRL_DT];
 
@@ -330,8 +330,11 @@ function runLoop() {
     // Step physics and write results
     stepAndWriteTransforms(dt);
 
-    // Signal completion
-    transforms[CTRL_STEP_COMPLETE] = 1;
+    // Signal completion — Atomics.store provides a release barrier:
+    // all transform writes above are visible to the main thread
+    // before it sees STEP_COMPLETE = 1.
+    Atomics.store(controlInt32, CTRL_STEP_COMPLETE, 1);
+    Atomics.notify(controlInt32, CTRL_STEP_COMPLETE);
   }
 
   // Schedule next check — use setTimeout(0) for consistent polling
