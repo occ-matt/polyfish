@@ -323,9 +323,13 @@ export class XRManager {
       if (this.sceneManager) this.sceneManager.setVRMode(true);
       if (this.marineSnow) this.marineSnow.setVRMode(true);
       if (this.vfxManager) this.vfxManager.setVRMode(true);
+      // Show DOM overlay root so VREndScreen can inject credits into it
+      if (this._xrOverlay) this._xrOverlay.style.display = '';
       // XRManager: VR session started
     });
     xr.addEventListener('sessionend', () => {
+      // Hide DOM overlay root
+      if (this._xrOverlay) this._xrOverlay.style.display = 'none';
       this._active = false;
       this._feedHeldPerCtrl = [false, false];
       this._feedJustReleasedPerCtrl = [false, false];
@@ -362,10 +366,19 @@ export class XRManager {
       // XRManager: VR session ended
     });
 
+    // Persistent DOM overlay root for WebXR – used by VREndScreen to show
+    // the same HTML/CSS credits inside VR that desktop users see.
+    this._xrOverlay = document.createElement('div');
+    this._xrOverlay.id = 'xr-dom-overlay';
+    this._xrOverlay.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:999;display:none;';
+    document.body.appendChild(this._xrOverlay);
+
     // Create VR button using official Three.js implementation.
     // Handles offerSession, proper sessionInit, etc.
+    // dom-overlay lets us project HTML credits directly into VR.
     this._vrButton = VRButton.createButton(this.renderer, {
-      optionalFeatures: ['hand-tracking'],
+      optionalFeatures: ['hand-tracking', 'dom-overlay'],
+      domOverlay: { root: this._xrOverlay },
     });
 
     // Place VR button inside the title-screen button group so it visually

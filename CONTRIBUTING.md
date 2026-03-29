@@ -63,7 +63,7 @@ PolyFish_ThreeJS/
 │   │   ├── MarineSnow.js            # Floating particle background
 │   │   ├── ParticleBurst.js         # Eating/death effect particles
 │   │   ├── FadeOverlay.js           # Fade-to-black transitions
-│   │   ├── VREndScreen.js           # End-of-simulation credits sequence (DOM overlay + VR 3D panel)
+│   │   ├── VREndScreen.js           # End-of-simulation credits sequence (unified DOM overlay for desktop + VR)
 │   │   ├── CausticShader.js         # Procedural underwater caustic lighting
 │   │   └── WaterSurface.js          # GPU wave animation for ocean surface
 │   ├── camera/
@@ -145,8 +145,8 @@ When the ecosystem crashes (all fish eaten, zero population):
    - Clears arrays
 3. **Audio stop**: `stopAll()` kills audio sources with `onended=null` to prevent ghost callbacks
 4. **End sequence** (`VREndScreen`): Cinematic credits sequence with phased transitions:
-   - Desktop/mobile: DOM overlay with CSS-based scrolling credits over a black fade
-   - VR: World-space 3D panel (canvas texture) placed 5m in front of the user's gaze
+   - Unified DOM overlay for both desktop and VR (WebXR `dom-overlay` feature)
+   - Tint sphere darkens the 3D scene; HTML/CSS credits render identically on both platforms
    - Phases: `stopping` → `fading` (scene darkens to ~88%) → `reveal` (credits fade in) → `scrolling` (film-style upward scroll) → `finale` (fade to full black) → `done` (page reload)
    - Dev shortcut: Press `0` in dev mode (`?dev=true`) to trigger immediately
 5. **Page reload**: After credits complete, the page reloads to restart fresh
