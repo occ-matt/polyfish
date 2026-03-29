@@ -226,7 +226,7 @@ export function syncPlantInstances(instanced, activePlants) {
 
   // Clamp to buffer capacity — plant pool can grow beyond MAX_PLANT_INSTANCES.
   // The bone DataTexture has `maxCount` rows; writing past it corrupts bone data.
-  const maxCapacity = mesh.instanceMatrix.count / 16; // InstancedMesh maxCount
+  const maxCapacity = mesh.instanceMatrix.count; // InstancedMesh maxCount
   let writeIdx = 0;
 
   for (let i = 0; i < activePlants.length; i++) {
