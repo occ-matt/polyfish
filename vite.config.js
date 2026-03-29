@@ -30,6 +30,8 @@ export default defineConfig({
         'making-of-ecosystem': resolve(__dirname, 'making-of/ecosystem.html'),
         'making-of-audio': resolve(__dirname, 'making-of/audio.html'),
         'making-of-performance': resolve(__dirname, 'making-of/performance.html'),
+        'making-of-ai': resolve(__dirname, 'making-of/ai.html'),
+        'making-of-demos': resolve(__dirname, 'making-of/demos.html'),
       },
     },
   },
