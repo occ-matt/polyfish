@@ -152,8 +152,22 @@ export function simulationStep(dt, elapsed) {
     GS.physicsProxy.setPosition(GS.playerBodySlot, cam.x, cam.y - 0.9, cam.z, 0);
   }
 
-  // Push food velocity/position to Jolt BEFORE the step
+  // Push food velocity/position to Jolt BEFORE the step.
+  // Physics LOD: only push Jolt commands for food near the camera (< 20 m).
+  // Distant food uses simple PhysicsBody integration — no visible difference
+  // but saves 2 SAB commands per food per frame.  Fish eating is spatial-hash
+  // based and unaffected.
+  const _cam = sceneManager.getCamera().position;
+  const _foodPhysLodDistSq = 20 * 20;
   for (const food of GS.foodPool.active) {
+    if (food.active && !food.held) {
+      const dx = food.body.position.x - _cam.x;
+      const dy = food.body.position.y - _cam.y;
+      const dz = food.body.position.z - _cam.z;
+      food._useJolt = (dx * dx + dy * dy + dz * dz) < _foodPhysLodDistSq;
+    } else {
+      food._useJolt = true; // held food always uses Jolt
+    }
     food.preStep(dt);
   }
 
@@ -285,16 +299,15 @@ export function simulationStep(dt, elapsed) {
     if (food.active) {
       food.update(dt);
       if (!food.active) return;
-      // Held food (VR): mesh is parented to a controller grip, so
-      // mesh.position is in local grip space, NOT world space. Use
-      // body.position (synced to grip world pos by main.js) for the
-      // spatial hash so fish can still find and eat from the hand.
-      // Skip the instanced mesh (the grip-parented mesh renders it).
+      // Held food (VR): use body.position for the spatial hash (fish
+      // need world-space coords to find and eat from the hand). The mesh
+      // position is also world-space now (lerp-based, not grip-parented),
+      // so it flows through to the instanced mesh update below.
       if (food.held) {
         GS.foodHash.insert(food, food.body.position.x, food.body.position.z);
-        return;
+      } else {
+        GS.foodHash.insert(food, food.mesh.position.x, food.mesh.position.z);
       }
-      GS.foodHash.insert(food, food.mesh.position.x, food.mesh.position.z);
       if (foodIdx < GS.foodInstancedMesh.instanceMatrix.count) {
         GS._instanceEuler.copy(food.mesh.rotation);
         GS._instanceQuat.setFromEuler(GS._instanceEuler);

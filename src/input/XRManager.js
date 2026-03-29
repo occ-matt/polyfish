@@ -838,6 +838,14 @@ export class XRManager {
           baseVelocity = new THREE.Vector3();
         }
 
+        // XR API velocity is in reference-space coordinates. Smooth turn
+        // rotates the rig (not the reference space), so we must apply the
+        // rig's rotation to get the correct world-space throw direction.
+        baseVelocity.applyQuaternion(this.rig.quaternion);
+
+        // Scale down — raw XR velocity feels too hot for underwater food tossing
+        baseVelocity.multiplyScalar(0.6);
+
         throwForce = baseVelocity;
         throwForce.y += this.floatUp;
 
@@ -851,6 +859,9 @@ export class XRManager {
           angularVelocity = new THREE.Vector3().copy(grip.angularVelocity);
         } else if (controller.hasAngularVelocity) {
           angularVelocity = new THREE.Vector3().copy(controller.angularVelocity);
+        }
+        if (angularVelocity) {
+          angularVelocity.applyQuaternion(this.rig.quaternion);
         }
 
         throwForce = throwForce.clone();

@@ -99,6 +99,11 @@ export class Food {
 
     // Jolt physics body for collisions with creatures/terrain
     this.joltBodyID = null;
+
+    // Physics LOD — set each frame by SimulationSystem based on camera distance.
+    // When false, food skips Jolt command writes and readback, using only
+    // simple PhysicsBody integration.  Saves 2 SAB commands per distant food.
+    this._useJolt = true;
   }
 
   activate(position, force, plantAgeFraction = 0) {
@@ -203,6 +208,9 @@ export class Food {
     // Advance simple physics so velocity is current
     this.body.update(dt);
 
+    // Physics LOD: distant food skips Jolt commands — simple physics only.
+    if (!this._useJolt) return;
+
     if (this.held) {
       const p = this.body.position;
       physicsProxy.setPosition(this.joltBodyID, p.x, p.y, p.z, 0);
@@ -244,8 +252,10 @@ export class Food {
     }
     this.mesh.scale.setScalar(scale);
 
-    // Read back collision-corrected position from Jolt (step already happened)
-    if (this.joltBodyID !== null && physicsProxy && !this.held) {
+    // Read back collision-corrected position from Jolt (step already happened).
+    // Physics LOD: distant food (_useJolt === false) skips readback — simple
+    // physics position is already correct from preStep's body.update().
+    if (this._useJolt && this.joltBodyID !== null && physicsProxy && !this.held) {
       const jPos = physicsProxy.getPosition(this.joltBodyID);
       this.body.position.set(jPos.x, jPos.y, jPos.z);
       // Also read back velocity — Jolt may have altered it from collisions

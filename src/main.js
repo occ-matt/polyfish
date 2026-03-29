@@ -146,8 +146,10 @@ let _vrHeldFood = [null, null];     // VR: per-controller held food
 let _vrFoodSpawned = [false, false]; // VR: per-controller spawn debounce
 let _vrFoodParentedTo = [null, null]; // VR: which grip each food is parented to
 const _vrFoodWorldPos = new THREE.Vector3(); // reusable temp for world pos readback
+const _vrFoodTarget = new THREE.Vector3();   // reusable temp for lerp target
+const _vrFoodTargetQuat = new THREE.Quaternion(); // reusable temp for grip quaternion
 
-// Local offset for food parented to grip (slightly forward and above grip origin)
+// Local offset for food relative to grip (slightly forward and above grip origin)
 const VR_FOOD_GRIP_OFFSET = new THREE.Vector3(0, 0.02, -0.18);
 
 // Dev mode — enabled via ?dev=true URL parameter.
@@ -1056,16 +1058,13 @@ function gameLoop() {
     if (heldFood.mesh.parent === scene) scene.remove(heldFood.mesh);
     heldFood = null; // food was eaten/expired
   }
-  // VR: check per-controller held food for eaten/expired - unparent if needed
+  // VR: check per-controller held food for eaten/expired
   for (let ci = 0; ci < 2; ci++) {
     if (_vrHeldFood[ci] && !_vrHeldFood[ci].active) {
       if (xrManager && xrManager.active) xrManager.pulseEatHaptic();
-      // Unparent from grip if still attached
-      if (_vrFoodParentedTo[ci]) {
-        _vrFoodParentedTo[ci].remove(_vrHeldFood[ci].mesh);
-        _vrFoodParentedTo[ci] = null;
-      }
+      _vrHeldFood[ci]._vrGrip = null;
       _vrHeldFood[ci] = null;
+      _vrFoodParentedTo[ci] = null;
     }
   }
 
@@ -1094,70 +1093,77 @@ function gameLoop() {
             food._vrHeldScale = food.targetScale;
             food.targetScale *= 0.5;
 
-            // Remove food mesh from scene and parent to grip at local offset.
-            // This makes the food follow the controller automatically via scene graph.
-            food.mesh.parent?.remove(food.mesh);
-            r.grip.add(food.mesh);
-            food.mesh.position.copy(VR_FOOD_GRIP_OFFSET);
-            food.mesh.quaternion.identity(); // local rotation relative to grip
-
-            // Keep physics body far away until grip matrixWorld is valid.
-            // The grip's matrixWorld is stale for the first 1-2 frames after
-            // parenting, so getWorldPosition would return (0,0,0), making
-            // fish swim to the world origin.
+            // Keep food in scene (not parented to grip) so we can lerp for
+            // a weighted feel. Hide it until the grip's matrixWorld is valid
+            // (stale for the first 1-2 frames).
+            food.mesh.position.set(0, -99999, 0);
             food.body.position.set(0, -99999, 0);
             food.body.velocity.set(0, 0, 0);
             food._vrGripFrames = 0;
+            food._vrGrip = r.grip; // reference for lerp target each frame
 
             _vrHeldFood[ci] = food;
             _vrFoodSpawned[ci] = true;
-            _vrFoodParentedTo[ci] = r.grip;
+            _vrFoodParentedTo[ci] = null;
             audioManager?.playSFXVariant('spawn');
           }
         } else if (r.triggerHeld && _vrHeldFood[ci]) {
-          // HOLD: food mesh tracks automatically via scene graph.
-          // Sync physics body from the mesh's world position (computed by renderer).
+          // HOLD: lerp food toward grip for a weighted/laggy feel (like desktop).
           const food = _vrHeldFood[ci];
           food._vrGripFrames = (food._vrGripFrames || 0) + 1;
-          // Skip body sync for the first 2 frames - matrixWorld is stale
-          // until renderer.render() has run at least once after parenting.
-          if (food._vrGripFrames >= 2) {
-            food.mesh.getWorldPosition(_vrFoodWorldPos);
-            food.body.position.copy(_vrFoodWorldPos);
+
+          if (food._vrGripFrames >= 2 && food._vrGrip) {
+            // Compute world-space target from grip + local offset
+            // (localToWorld calls updateWorldMatrix internally)
+            _vrFoodTarget.copy(VR_FOOD_GRIP_OFFSET);
+            food._vrGrip.localToWorld(_vrFoodTarget);
+            food._vrGrip.getWorldQuaternion(_vrFoodTargetQuat);
+
+            if (food._vrGripFrames === 2) {
+              // First valid frame — snap to position (no lerp from -99999)
+              food.mesh.position.copy(_vrFoodTarget);
+              food.mesh.quaternion.copy(_vrFoodTargetQuat);
+            } else {
+              // Lerp for weighted feel (tighter than desktop's -12 for snappier VR tracking)
+              const lerpFactor = 1 - Math.exp(-20 * (dt || 0.016));
+              food.mesh.position.lerp(_vrFoodTarget, lerpFactor);
+              food.mesh.quaternion.slerp(_vrFoodTargetQuat, lerpFactor);
+            }
+            food.body.position.copy(food.mesh.position);
           }
           food.body.velocity.set(0, 0, 0);
         }
 
-        // Trigger released -> unparent and throw food
+        // Trigger released -> throw food
         if (r.triggerReleased) {
           _vrFoodSpawned[ci] = false;
           const food = _vrHeldFood[ci];
           if (food && food.active) {
-            // Read world transform BEFORE unparenting
-            food.mesh.getWorldPosition(_vrFoodWorldPos);
-            const worldQuat = food.mesh.getWorldQuaternion(new THREE.Quaternion());
-
-            // Unparent from grip, re-add to scene
-            if (_vrFoodParentedTo[ci]) {
-              _vrFoodParentedTo[ci].remove(food.mesh);
-            }
-            sceneManager.getScene().add(food.mesh);
-            food.mesh.position.copy(_vrFoodWorldPos);
-            food.mesh.quaternion.copy(worldQuat);
-            food.body.position.copy(_vrFoodWorldPos);
+            // Food is already in the scene with correct world position/rotation
+            // from lerp — just sync the physics body.
+            food.body.position.copy(food.mesh.position);
 
             if (food._vrHeldScale) {
               food.targetScale = food._vrHeldScale;
               food._vrHeldScale = null;
             }
+
+            // Release — override random spin with controller angular velocity
+            // so the food continues the motion of your hand.
             food.release();
+            if (r.throwForce?._angularVelocity) {
+              food.spinX = r.throwForce._angularVelocity.x;
+              food.spinZ = r.throwForce._angularVelocity.z;
+            } else {
+              food.spinX = (Math.random() - 0.5) * 2;
+              food.spinZ = (Math.random() - 0.5) * 2;
+            }
+
             if (r.throwForce) {
               food.body.addImpulse(r.throwForce);
-              if (r.throwForce._angularVelocity && food.body.angularVelocity) {
-                food.body.angularVelocity.copy(r.throwForce._angularVelocity);
-              }
             }
             audioManager?.playSFXVariant('throw');
+            food._vrGrip = null;
             _vrHeldFood[ci] = null;
             _vrFoodParentedTo[ci] = null;
           }
