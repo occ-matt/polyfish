@@ -1,6 +1,6 @@
 {
   "name": "polyfish-threejs",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "PolyFish underwater ecosystem simulation - Three.js port",
   "license": "MIT",
   "author": "Matt Scott",

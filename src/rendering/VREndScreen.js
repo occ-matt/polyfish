@@ -250,11 +250,29 @@ export class VREndScreen {
 
     console.log(`[VREndScreen] start – isVR=${this._isVR}`);
 
+    // Hide mobile/desktop HUD elements so they don't show over credits
+    this._hideHUD();
+
     if (!this._isVR) {
       // Desktop/mobile: create DOM overlay immediately
       this._createDOMOverlay();
     }
     // VR: tint sphere fades to black first, then we exit XR and show DOM credits
+  }
+
+  /** Hide all game HUD elements (mobile controls, feed button, etc.) */
+  _hideHUD() {
+    const ids = [
+      'joystick-container', 'feed-btn', 'gyro-toggle', 'cinema-toggle',
+      'hud', 'mode-selector',
+    ];
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    }
+    // VR enter button (created by Three.js VRButton, no stable ID — find by class/text)
+    const vrBtn = document.getElementById('VRButton');
+    if (vrBtn) vrBtn.style.display = 'none';
   }
 
   // ── DOM overlay setup ──
