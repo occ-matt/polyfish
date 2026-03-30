@@ -3,6 +3,7 @@
  * Dropdown to pick model type. Skeleton helper toggle.
  */
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { SceneMode } from './SceneMode.js';
 import { getModelClone } from '../core/ModelLoader.js';
 import { CONFIG } from '../config.js';
@@ -32,13 +33,28 @@ export class ModelViewerMode extends SceneMode {
     this.skeletonHelper = null;
     this.showSkeleton = false;
     this.currentKey = 'fish';
+    this._orbitControls = null;
   }
 
   async enter(ctx) {
-    // Camera: close-up for model inspection
-    ctx.cameraController.controls.autoRotate = false;
-    ctx.cameraController.controls.target.set(0, 0, 0);
+    // Disable FPS camera — viewer uses its own orbit controls
+    ctx.cameraController.enabled = false;
+    if (document.pointerLockElement) document.exitPointerLock();
+
+    // Set up OrbitControls for model inspection
+    const orbit = new OrbitControls(ctx.camera, ctx.renderer.domElement);
+    orbit.enableDamping = true;
+    orbit.dampingFactor = 0.12;
+    orbit.rotateSpeed = 0.6;
+    orbit.zoomSpeed = 1.0;
+    orbit.minDistance = 0.5;
+    orbit.maxDistance = 40;
+    this._orbitControls = orbit;
+
+    // Initial camera position
+    orbit.target.set(0, 0, 0);
     ctx.camera.position.set(0, 0, 3);
+    orbit.update();
 
     // Show viewer UI
     this._showUI(ctx);
@@ -48,12 +64,21 @@ export class ModelViewerMode extends SceneMode {
   }
 
   async exit(ctx) {
+    // Re-enable FPS camera controller
+    ctx.cameraController.enabled = true;
+
+    // Dispose orbit controls
+    if (this._orbitControls) {
+      this._orbitControls.dispose();
+      this._orbitControls = null;
+    }
+
     this._removeCurrentModel(ctx);
     this._hideUI();
   }
 
   update(dt, elapsed, ctx) {
-    // Gentle auto-spin if desired (toggle-able)
+    if (this._orbitControls) this._orbitControls.update();
   }
 
   handleKeyDown(e, ctx) {
@@ -104,8 +129,11 @@ export class ModelViewerMode extends SceneMode {
     const center = box.getCenter(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
 
-    ctx.cameraController.controls.target.copy(center);
-    ctx.camera.position.set(center.x, center.y, center.z + maxDim * 2.5);
+    if (this._orbitControls) {
+      this._orbitControls.target.copy(center);
+      ctx.camera.position.set(center.x, center.y, center.z + maxDim * 2.5);
+      this._orbitControls.update();
+    }
 
 
     // Update skeleton helper

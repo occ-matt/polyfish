@@ -13,8 +13,10 @@ import { createColorMaterial } from '../rendering/IBLMaterial.js';
 import { CREATURE_ANIM_CONFIGS } from '../systems/ProceduralAnim.js';
 import { applySwimMaterial, updateSwimUniforms } from '../rendering/SwimMaterial.js';
 
-// Layout: entities spaced along X axis
-const LINEUP_Y = -6.8;
+// Layout: entities spaced along X axis.
+// LINEUP_Y must be well above the terrain surface (which ranges -9.81 to -5.81,
+// base at -7.81). -3.0 places entities comfortably in the water column.
+const LINEUP_Y = -3.0;
 const LINEUP_Z = 2;
 const SPACING = 5.5;
 
@@ -45,18 +47,27 @@ function getConfigForType(type) {
   return null;
 }
 
+// Editable fields per entity type — must match CONFIG.creatures[type] keys.
+// Grouped: movement → eating → physics → metabolism → visual
 const EDITABLE_FIELDS = {
-  fish: ['speed', 'lookTime', 'engineBurnTime', 'foodToReproduce', 'foodToLeaveWaste',
-         'mouthRadius', 'mouthOffset', 'scale', 'mass', 'drag', 'angularDrag',
-         'minLifetime', 'hasMetabolism', 'metabolicClock', 'startingMetabolism',
-         'energyUsedPerMinute', 'foodEnergy', 'color'],
-  dolphin: ['speed', 'lookTime', 'engineBurnTime', 'foodToReproduce', 'foodToLeaveWaste',
-            'mouthRadius', 'mouthOffset', 'scale', 'mass', 'drag', 'angularDrag',
-            'minLifetime', 'hasMetabolism', 'foodEnergy', 'color'],
-  manatee: ['speed', 'lookTime', 'engineBurnTime', 'foodToReproduce', 'foodToLeaveWaste',
-            'mouthRadius', 'mouthOffset', 'scale', 'mass', 'drag', 'angularDrag',
-            'minLifetime', 'hasMetabolism', 'metabolicClock', 'startingMetabolism',
-            'energyUsedPerMinute', 'foodEnergy', 'color'],
+  fish: ['speed', 'thrustMultiplier', 'lookTime', 'engineBurnTime',
+         'foodToReproduce', 'foodToLeaveWaste', 'foodEnergy',
+         'mouthRadius', 'mouthOffset', 'fleeRadius',
+         'mass', 'drag', 'angularDrag', 'capsuleRadius', 'capsuleHalfHeight',
+         'hasMetabolism', 'metabolicClock', 'startingMetabolism', 'energyUsedPerMinute',
+         'minLifetime', 'scale', 'color'],
+  dolphin: ['speed', 'thrustMultiplier', 'lookTime', 'engineBurnTime',
+            'foodToReproduce', 'foodToLeaveWaste', 'foodEnergy',
+            'mouthRadius', 'mouthOffset',
+            'mass', 'drag', 'angularDrag', 'capsuleRadius', 'capsuleHalfHeight',
+            'hasMetabolism', 'metabolicClock', 'startingMetabolism', 'energyUsedPerMinute',
+            'minLifetime', 'scale', 'color'],
+  manatee: ['speed', 'thrustMultiplier', 'lookTime', 'engineBurnTime',
+            'foodToReproduce', 'foodToLeaveWaste', 'foodEnergy',
+            'mouthRadius', 'mouthOffset', 'fleeRadius',
+            'mass', 'drag', 'angularDrag', 'capsuleRadius', 'capsuleHalfHeight',
+            'hasMetabolism', 'metabolicClock', 'startingMetabolism', 'energyUsedPerMinute',
+            'minLifetime', 'scale', 'color'],
   kelp: ['kelpScale', 'collisionRadius'],
   food: ['foodScale', 'color'],
   poo: ['seedScale', 'color'],
@@ -258,7 +269,8 @@ export class EditorMode extends SceneMode {
     for (let i = 0; i < ENTITY_ORDER.length; i++) {
       const { type, label } = ENTITY_ORDER[i];
       const x = i * SPACING;
-      const y = type === 'kelp' ? -7.81 : LINEUP_Y;
+      // Kelp grows from the seafloor; everything else floats in the water column
+      const y = type === 'kelp' ? -7.0 : LINEUP_Y;
       const z = LINEUP_Z;
 
       let mesh = null;
