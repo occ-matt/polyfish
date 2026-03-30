@@ -305,9 +305,11 @@ export function simulationStep(dt, elapsed) {
       // so it flows through to the instanced mesh update below.
       if (food.held) {
         GS.foodHash.insert(food, food.body.position.x, food.body.position.z);
-        // Held food is rendered as an individual mesh (added to scene in main.js),
-        // so skip the instanced mesh sync to avoid double-rendering.
-        return;
+        // Desktop/mobile held food is rendered as an individual mesh (added to
+        // scene in main.js onHold callback), so skip instanced sync to avoid
+        // double-rendering. VR held food has no scene parent — let it through
+        // to the instanced path below so it remains visible while held.
+        if (food.mesh.parent) return;
       } else {
         GS.foodHash.insert(food, food.mesh.position.x, food.mesh.position.z);
       }
