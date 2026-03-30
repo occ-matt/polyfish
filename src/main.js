@@ -184,6 +184,7 @@ let _vrFoodParentedTo = [null, null]; // VR: which grip each food is parented to
 const _vrFoodWorldPos = new THREE.Vector3(); // reusable temp for world pos readback
 const _vrFoodTarget = new THREE.Vector3(); // reusable temp for lerp target
 const _vrFoodTargetQuat = new THREE.Quaternion(); // reusable temp for grip quaternion
+const _vrFoodSpawnPos = new THREE.Vector3(0, -99999, 0); // offscreen position for new held food
 
 // Local offset for food relative to grip (slightly forward and above grip origin)
 const VR_FOOD_GRIP_OFFSET = new THREE.Vector3(0, 0.02, -0.18);
@@ -1245,7 +1246,7 @@ function gameLoop() {
 							// Use a position far from anything so the physics body (and any
 							// Jolt collider) doesn't interact with fish before we can sync
 							// it to the real grip position.
-							food.activateHeld(new THREE.Vector3(0, -99999, 0));
+							food.activateHeld(_vrFoodSpawnPos);
 							food._vrHeldScale = food.targetScale;
 							food.targetScale *= 0.5;
 

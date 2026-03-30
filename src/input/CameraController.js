@@ -12,6 +12,14 @@ const _v = new THREE.Vector3();
 const _forward = new THREE.Vector3();
 const _right = new THREE.Vector3();
 const _lookAt = new THREE.Vector3();
+// Scratch vectors for screensaver camera math — avoids per-frame .clone() allocations
+const _prevPos = new THREE.Vector3();
+const _prevLookAt = new THREE.Vector3();
+const _posDelta = new THREE.Vector3();
+const _lookDelta = new THREE.Vector3();
+const _newLookDir = new THREE.Vector3();
+const _clampedDir = new THREE.Vector3();
+const _scratchDir = new THREE.Vector3();
 
 /**
  * CameraController — two modes:
@@ -694,8 +702,8 @@ export class CameraController {
               this.camera.lookAt(frame.lookAt);
               // Reset velocity tracking after teleport to prevent first-frame spike
               this._lastCamPos.copy(frame.position);
-              const newLookDir = frame.lookAt.clone().sub(frame.position).normalize();
-              this._lastLookDir.copy(newLookDir);
+              _newLookDir.copy(frame.lookAt).sub(frame.position).normalize();
+              this._lastLookDir.copy(_newLookDir);
               this._camVelocity = 0;
               this._camAngularVelocity = 0;
               ss.fadePendingShot = null;
@@ -808,9 +816,9 @@ export class CameraController {
     const posRate = 1 - Math.exp(-clampedPosRate * dt);
     const lookRate = 1 - Math.exp(-clampedLookRate * dt);
 
-    // Save pre-lerp position for velocity clamping
-    const prevPos = this.camera.position.clone();
-    const prevLookAt = ss.smoothLookAt.clone();
+    // Save pre-lerp position for velocity clamping (scratch vectors, no allocation)
+    _prevPos.copy(this.camera.position);
+    _prevLookAt.copy(ss.smoothLookAt);
 
     this.camera.position.lerp(frame.position, posRate);
     ss.smoothLookAt.lerp(frame.lookAt, lookRate);
@@ -823,32 +831,32 @@ export class CameraController {
     // This prevents speed spikes and keeps motion naturalistic
     if (dt > 0) {
       const maxPosMove = 0.5 * dt;
-      const posDelta = this.camera.position.clone().sub(prevPos);
-      if (posDelta.length() > maxPosMove) {
-        posDelta.setLength(maxPosMove);
-        this.camera.position.copy(prevPos).add(posDelta);
+      _posDelta.copy(this.camera.position).sub(_prevPos);
+      if (_posDelta.length() > maxPosMove) {
+        _posDelta.setLength(maxPosMove);
+        this.camera.position.copy(_prevPos).add(_posDelta);
       }
       // World-space lookAt clamp (prevents teleporting lookAt)
       const maxLookMove = 1.0 * dt;
-      const lookDelta = ss.smoothLookAt.clone().sub(prevLookAt);
-      if (lookDelta.length() > maxLookMove) {
-        lookDelta.setLength(maxLookMove);
-        ss.smoothLookAt.copy(prevLookAt).add(lookDelta);
+      _lookDelta.copy(ss.smoothLookAt).sub(_prevLookAt);
+      if (_lookDelta.length() > maxLookMove) {
+        _lookDelta.setLength(maxLookMove);
+        ss.smoothLookAt.copy(_prevLookAt).add(_lookDelta);
       }
 
       // Final angular velocity clamp: both position AND lookAt changes contribute to
       // angular velocity. Clamp the resulting look direction change directly.
       if (this._lastLookDir.lengthSq() > 0) {
         const maxAngularChange = 30 * dt; // 30°/s max — gentle diver-like pan
-        const newLookDir = ss.smoothLookAt.clone().sub(this.camera.position).normalize();
-        const dot = Math.min(1, Math.max(-1, newLookDir.dot(this._lastLookDir)));
+        _newLookDir.copy(ss.smoothLookAt).sub(this.camera.position).normalize();
+        const dot = Math.min(1, Math.max(-1, _newLookDir.dot(this._lastLookDir)));
         const angularChangeDeg = Math.acos(dot) * 180 / Math.PI;
         if (angularChangeDeg > maxAngularChange) {
           // Interpolate look direction back toward previous to stay within angular budget
           const ratio = maxAngularChange / angularChangeDeg;
-          const clampedDir = new THREE.Vector3().copy(this._lastLookDir).lerp(newLookDir, ratio).normalize();
+          _clampedDir.copy(this._lastLookDir).lerp(_newLookDir, ratio).normalize();
           const dist = ss.smoothLookAt.distanceTo(this.camera.position);
-          ss.smoothLookAt.copy(this.camera.position).addScaledVector(clampedDir, dist);
+          ss.smoothLookAt.copy(this.camera.position).addScaledVector(_clampedDir, dist);
         }
       }
     }
@@ -856,7 +864,7 @@ export class CameraController {
     // Gimbal lock safety: prevent lookAt direction from being nearly parallel to up vector.
     // When the camera looks almost straight up or down, THREE.lookAt() can spin wildly.
     {
-      const lookDir = ss.smoothLookAt.clone().sub(this.camera.position);
+      const lookDir = _scratchDir.copy(ss.smoothLookAt).sub(this.camera.position);
       const len = lookDir.length();
       if (len > 0.001) {
         lookDir.divideScalar(len);
@@ -881,18 +889,18 @@ export class CameraController {
       this._camVelocity = 0;
       this._camAngularVelocity = 0;
       this._lastCamPos.copy(this.camera.position);
-      const skipDir = ss.smoothLookAt.clone().sub(this.camera.position).normalize();
-      this._lastLookDir.copy(skipDir);
+      _scratchDir.copy(ss.smoothLookAt).sub(this.camera.position).normalize();
+      this._lastLookDir.copy(_scratchDir);
     } else {
-      const camDelta = this.camera.position.clone().sub(this._lastCamPos);
-      this._camVelocity = dt > 0 ? camDelta.length() / dt : 0;
-      const currentLookDir = ss.smoothLookAt.clone().sub(this.camera.position).normalize();
+      _posDelta.copy(this.camera.position).sub(this._lastCamPos);
+      this._camVelocity = dt > 0 ? _posDelta.length() / dt : 0;
+      _newLookDir.copy(ss.smoothLookAt).sub(this.camera.position).normalize();
       if (this._lastLookDir.lengthSq() > 0) {
-        const angleDiff = Math.acos(Math.min(1, Math.max(-1, currentLookDir.dot(this._lastLookDir))));
+        const angleDiff = Math.acos(Math.min(1, Math.max(-1, _newLookDir.dot(this._lastLookDir))));
         this._camAngularVelocity = dt > 0 ? (angleDiff * 180 / Math.PI) / dt : 0;
       }
       this._lastCamPos.copy(this.camera.position);
-      this._lastLookDir.copy(currentLookDir);
+      this._lastLookDir.copy(_newLookDir);
     }
 
     // Console warnings for speed violations (debug only - fires per frame)

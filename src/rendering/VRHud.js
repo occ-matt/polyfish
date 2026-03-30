@@ -78,8 +78,13 @@ export class VRHud {
    * @param {Object} populationData - { fish, dolphin, manatee, plant, speciesSeen }
    */
   update(populationData) {
+    // Shallow property comparison — avoids JSON.stringify allocation+serialization per frame
     if (this._lastPopulationData &&
-        JSON.stringify(this._lastPopulationData) === JSON.stringify(populationData)) {
+        this._lastPopulationData.fish === populationData.fish &&
+        this._lastPopulationData.dolphin === populationData.dolphin &&
+        this._lastPopulationData.manatee === populationData.manatee &&
+        this._lastPopulationData.plant === populationData.plant &&
+        this._lastPopulationData.speciesSeen === populationData.speciesSeen) {
       return;
     }
 

@@ -38,6 +38,7 @@ const _currForward = new THREE.Vector3();
 const _bankQuat = new THREE.Quaternion();
 const _bankEuler = new THREE.Euler();
 const _mouthPos = new THREE.Vector3();
+const _childPos = new THREE.Vector3();
 const _separationHashResults = []; // Pre-allocated array for spatial hash queries in _applySeparation
 const _fleeHashResults = []; // Pre-allocated array for spatial hash queries in updateFlee
 const _eatHashResults = []; // Pre-allocated array for spatial hash queries in checkEating
@@ -1324,8 +1325,8 @@ export class Creature {
         this.offspringCount++;
         if (callbacks.onReproduce) {
           const offset = randomInsideSphere(randomRange(0.5, 1.2));
-          const childPos = this.mesh.position.clone().add(offset);
-          callbacks.onReproduce(this.type, childPos, this.speed);
+          _childPos.copy(this.mesh.position).add(offset);
+          callbacks.onReproduce(this.type, _childPos, this.speed);
         }
       }
     }
@@ -1369,8 +1370,8 @@ export class Creature {
         this.offspringCount++;
         if (callbacks.onReproduce) {
           const offset = randomInsideSphere(randomRange(0.5, 1.2));
-          const childPos = this.mesh.position.clone().add(offset);
-          callbacks.onReproduce(this.type, childPos, this.speed);
+          _childPos.copy(this.mesh.position).add(offset);
+          callbacks.onReproduce(this.type, _childPos, this.speed);
         }
       }
     }

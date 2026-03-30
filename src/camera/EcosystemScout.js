@@ -99,13 +99,13 @@ export class EcosystemScout {
    * @returns {Object} ScoutReport with current best moment
    */
   update(dt) {
-    // Decay cooldowns
-    for (const eventType of Object.keys(this.eventCooldowns)) {
+    // Decay cooldowns (use for..in to avoid Object.keys() allocation)
+    for (const eventType in this.eventCooldowns) {
       this.eventCooldowns[eventType] += dt;
     }
 
-    // Clear previous candidates
-    this.scoutCandidates = [];
+    // Clear previous candidates (reuse array, avoid allocation)
+    this.scoutCandidates.length = 0;
 
     // Perform round-robin creature scan
     this._scanCreaturesBudget();

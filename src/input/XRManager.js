@@ -828,44 +828,46 @@ export class XRManager {
       if (triggerReleased) {
         // Prefer XR API velocity data (available on Quest).
         // Check both grip and controller for linear velocity.
-        let baseVelocity;
+        // Reuse module-level scratch vector for throw velocity — avoids per-throw allocations
         if (grip && grip.hasLinearVelocity) {
-          baseVelocity = new THREE.Vector3().copy(grip.linearVelocity);
+          _throwForce.copy(grip.linearVelocity);
         } else if (controller.hasLinearVelocity) {
-          baseVelocity = new THREE.Vector3().copy(controller.linearVelocity);
+          _throwForce.copy(controller.linearVelocity);
         } else {
           // No XR velocity data available - use zero (floatUp will be added below)
-          baseVelocity = new THREE.Vector3();
+          _throwForce.set(0, 0, 0);
         }
 
         // XR API velocity is in reference-space coordinates. Smooth turn
         // rotates the rig (not the reference space), so we must apply the
         // rig's rotation to get the correct world-space throw direction.
-        baseVelocity.applyQuaternion(this.rig.quaternion);
+        _throwForce.applyQuaternion(this.rig.quaternion);
 
         // Scale down — raw XR velocity feels too hot for underwater food tossing
-        baseVelocity.multiplyScalar(0.4);
+        _throwForce.multiplyScalar(0.4);
 
-        throwForce = baseVelocity;
-        throwForce.y += this.floatUp;
+        _throwForce.y += this.floatUp;
 
-        if (throwForce.length() < 0.3) {
-          throwForce.set(0, this.floatUp, 0);
+        if (_throwForce.length() < 0.3) {
+          _throwForce.set(0, this.floatUp, 0);
         }
 
         // Include angular velocity if available (spins the food on throw)
         let angularVelocity = null;
         if (grip && grip.hasAngularVelocity) {
-          angularVelocity = new THREE.Vector3().copy(grip.angularVelocity);
+          _controllerDir.copy(grip.angularVelocity);
+          angularVelocity = _controllerDir;
         } else if (controller.hasAngularVelocity) {
-          angularVelocity = new THREE.Vector3().copy(controller.angularVelocity);
+          _controllerDir.copy(controller.angularVelocity);
+          angularVelocity = _controllerDir;
         }
         if (angularVelocity) {
           angularVelocity.applyQuaternion(this.rig.quaternion);
         }
 
-        throwForce = throwForce.clone();
-        throwForce._angularVelocity = angularVelocity;
+        // Clone here because throwForce is consumed asynchronously by the caller
+        throwForce = new THREE.Vector3().copy(_throwForce);
+        throwForce._angularVelocity = angularVelocity ? new THREE.Vector3().copy(angularVelocity) : null;
       }
 
       results.push({ triggerHeld: held, triggerReleased, grip: grip || controller, throwForce });

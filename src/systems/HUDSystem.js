@@ -123,8 +123,13 @@ export class HUDSystem {
       ];
 
       // Check if the visible species list changed (need full DOM rebuild)
-      const visibleKeys = items.filter(i => i.seen).map(i => i.key).join(',');
-      const prevVisibleKeys = items.filter(i => this.speciesInHud[i.key]).map(i => i.key).join(',');
+      // Build key strings with a loop — avoids filter().map() intermediate arrays
+      let visibleKeys = '';
+      let prevVisibleKeys = '';
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].seen) visibleKeys += (visibleKeys ? ',' : '') + items[i].key;
+        if (this.speciesInHud[items[i].key]) prevVisibleKeys += (prevVisibleKeys ? ',' : '') + items[i].key;
+      }
       const speciesListChanged = visibleKeys !== prevVisibleKeys;
 
       if (speciesListChanged) {
