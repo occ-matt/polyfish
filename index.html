@@ -511,24 +511,7 @@
       border-radius: 1px;
       transition: width 0.4s ease-out;
     }
-    /* Perf overlay (hidden by default, shown via ?dev=true) */
-    #perf-overlay {
-      position: fixed;
-      top: 12px;
-      left: 12px;
-      z-index: 10000;
-      background: rgba(0, 0, 0, 0.75);
-      color: #0f0;
-      font-family: 'Courier New', monospace;
-      font-size: 11px;
-      line-height: 1.5;
-      padding: 8px 12px;
-      border-radius: 4px;
-      border: 1px solid rgba(0, 255, 0, 0.2);
-      pointer-events: none;
-      display: none;
-      white-space: pre;
-    }
+    /* Perf overlay styles removed — now handled by PerfMonitor.js */
   </style>
 </head>
 <body>
@@ -551,7 +534,7 @@
     <div class="loading-status" id="loading-status">Preparing</div>
     <div class="loading-bar-track"><div class="loading-bar-fill" id="loading-bar"></div></div>
   </div>
-  <div id="perf-overlay"></div>
+  <!-- PerfMonitor creates its own DOM elements in dev mode -->
   <div id="hud" style="display:none;">
     <div id="population-counter"></div>
   </div>

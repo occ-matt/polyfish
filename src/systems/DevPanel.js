@@ -5,8 +5,14 @@
 
 import GS from '../core/GameState.js';
 
+/**
+ * @param {Object} context
+ * @param {Object} context.modeManager
+ * @param {Object} context.modeContext
+ * @param {PerfMonitor} [context.perfMonitor] - PerfMonitor instance (if dev mode)
+ */
 export function buildDevPanel(context) {
-  const { modeManager, modeContext } = context;
+  const { modeManager, modeContext, perfMonitor } = context;
 
   const panel = document.createElement('div');
   panel.id = 'dev-panel';
@@ -16,14 +22,18 @@ export function buildDevPanel(context) {
     pointer-events: none;
   `;
 
-  // Move perf overlay inside the dev panel so they stack nicely
-  const perfEl = document.getElementById('perf-overlay');
-  if (perfEl) {
-    perfEl.style.position = 'static';
-    perfEl.style.top = '';
-    perfEl.style.left = '';
-    panel.appendChild(perfEl);
+  // Insert PerfMonitor (stats.js + custom info panel) at the top
+  if (perfMonitor) {
+    const perfDom = perfMonitor.dom;
+    perfDom.style.position = 'static';
+    perfDom.style.top = '';
+    perfDom.style.left = '';
+    panel.appendChild(perfDom);
   }
+
+  // Remove old perf-overlay element if it still exists in the DOM
+  const oldPerfEl = document.getElementById('perf-overlay');
+  if (oldPerfEl) oldPerfEl.remove();
 
   // Dev links container
   const links = document.createElement('div');

@@ -63,6 +63,7 @@ import { EditorMode } from "./modes/EditorMode.js";
 import { DesktopHints } from "./input/DesktopHints.js";
 import { TitleScreen } from "./systems/TitleScreen.js";
 import { buildDevPanel } from "./systems/DevPanel.js";
+import { PerfMonitor } from "./systems/PerfMonitor.js";
 import GS from "./core/GameState.js";
 import {
 	initSimulation,
@@ -385,10 +386,10 @@ async function init() {
 		`SAB: ${typeof SharedArrayBuffer !== "undefined"} iOS:${isIOS} mobile:${isMobile} noSim:${_params.has("noSim")} minimal:${MINIMAL}`,
 	);
 
-	// 0. Dev mode — show perf overlay when ?dev=true (dev panel built later after mode manager)
+	// 0. Dev mode — initialize perf monitor (stats.js + custom panel)
 	if (devMode) {
-		const perfEl = document.getElementById("perf-overlay");
-		if (perfEl) perfEl.style.display = "block";
+		perfMonitor = new PerfMonitor();
+		// The perf monitor DOM will be inserted into the dev panel once it's built
 	}
 
 	// Show VR build version in the copyright footer so we can verify code freshness
@@ -698,7 +699,7 @@ async function init() {
 
 		// Build dev panel now that modeManager and modeContext are ready
 		if (devMode) {
-			buildDevPanel({ modeManager, modeContext });
+			buildDevPanel({ modeManager, modeContext, perfMonitor });
 		}
 
 		// 15. Mode switching: buttons + keyboard (1/2/3)
@@ -1132,10 +1133,10 @@ function spawnInitialSeed() {
 
 // ── Game Loop ──────────────────────────────────────────────────
 let _diagFrameCount = 0;
-let perfTimer = 0;
-let perfFrameCount = 0;
+let perfMonitor = null;
 function gameLoop() {
 	try {
+		if (perfMonitor) perfMonitor.begin();
 		const rawDt = Math.min(clock.getDelta(), 0.1);
 		const elapsed = clock.elapsedTime;
 
@@ -1446,39 +1447,16 @@ function gameLoop() {
 			if (shaderErrors === 0) diagLog("All shaders compiled OK");
 		}
 
-		// Perf overlay — averaged FPS over the sampling window (dev mode only)
-		if (devMode) {
-			perfTimer += rawDt;
-			perfFrameCount++;
-			if (perfTimer >= 0.5) {
-				const info = renderer.info.render;
-				const perfEl = document.getElementById("perf-overlay");
-				if (perfEl) {
-					const avgDt = perfTimer / perfFrameCount;
-					const fps = (1 / avgDt).toFixed(0);
-					const ms = (avgDt * 1000).toFixed(1);
-					const calls = info.calls;
-					const tris = info.triangles;
-					const fa = fishPool.getActiveCount();
-					const da = dolphinPool.getActiveCount();
-					const ma = manateePool.getActiveCount();
-					const pa = plantPool.getActiveCount();
-					const fo = foodPool.getActiveCount();
-					const se = seedPool.getActiveCount();
-					perfEl.textContent =
-						`FPS: ${fps}  Frame: ${ms}ms\n` +
-						`Draw calls: ${calls}\n` +
-						`Triangles:  ${tris}\n` +
-						`─────────────────\n` +
-						`Fish:    ${fa}   Dolphin: ${da}\n` +
-						`Manatee: ${ma}   Plant:   ${pa}\n` +
-						`Food:    ${fo}   Seed:    ${se}\n` +
-						`TimeScale: ${timeScale}x` +
-						(adaptiveResolution ? `  DPR: ${adaptiveResolution.getDPR().toFixed(2)}` : '');
-				}
-				perfTimer = 0;
-				perfFrameCount = 0;
-			}
+		// Performance monitor — stats.js graphs + custom info panel (dev mode only)
+		if (perfMonitor) {
+			perfMonitor.end(rawDt, renderer, {
+				fish: fishPool,
+				dolphin: dolphinPool,
+				manatee: manateePool,
+				plant: plantPool,
+				food: foodPool,
+				seed: seedPool,
+			}, { timeScale, adaptiveResolution });
 		}
 	} catch (loopErr) {
 		// Catch any uncaught error in the game loop so it surfaces on iOS diag overlay
