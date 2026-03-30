@@ -650,9 +650,8 @@ async function init() {
 			const food = foodPool.get();
 			if (!food) return;
 			food.activateHeld(position);
-			// Instanced rendering skips held food (it early-returns for VR grip parenting).
-			// For desktop/mobile the mesh has no parent, so add it to the scene directly
-			// so it's visible while held.
+			// Held food is skipped by instanced rendering (early-return in SimulationSystem).
+			// The individual mesh must be in the scene so it's visible while held.
 			if (!food.mesh.parent) scene.add(food.mesh);
 			heldFood = food;
 			audioManager.playSFXVariant("spawn");

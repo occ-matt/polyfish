@@ -305,6 +305,9 @@ export function simulationStep(dt, elapsed) {
       // so it flows through to the instanced mesh update below.
       if (food.held) {
         GS.foodHash.insert(food, food.body.position.x, food.body.position.z);
+        // Held food is rendered as an individual mesh (added to scene in main.js),
+        // so skip the instanced mesh sync to avoid double-rendering.
+        return;
       } else {
         GS.foodHash.insert(food, food.mesh.position.x, food.mesh.position.z);
       }
