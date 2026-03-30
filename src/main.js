@@ -64,6 +64,7 @@ import { DesktopHints } from "./input/DesktopHints.js";
 import { TitleScreen } from "./systems/TitleScreen.js";
 import { buildDevPanel } from "./systems/DevPanel.js";
 import { PerfMonitor } from "./systems/PerfMonitor.js";
+import { PopulationGraph } from "./systems/PopulationGraph.js";
 import GS from "./core/GameState.js";
 import {
 	initSimulation,
@@ -386,10 +387,14 @@ async function init() {
 		`SAB: ${typeof SharedArrayBuffer !== "undefined"} iOS:${isIOS} mobile:${isMobile} noSim:${_params.has("noSim")} minimal:${MINIMAL}`,
 	);
 
-	// 0. Dev mode — initialize perf monitor (stats.js + custom panel)
+	// 0. Dev mode — initialize perf monitor and population graph
 	if (devMode) {
 		perfMonitor = new PerfMonitor();
 		// The perf monitor DOM will be inserted into the dev panel once it's built
+
+		populationGraph = new PopulationGraph();
+		document.body.appendChild(populationGraph.dom);
+		populationGraph.setVisible(true); // visible by default in dev mode
 	}
 
 	// Show VR build version in the copyright footer so we can verify code freshness
@@ -725,6 +730,12 @@ async function init() {
 					return;
 				}
 
+				// Population graph toggle (G key)
+				if (e.key === "g" || e.key === "G") {
+					if (populationGraph) populationGraph.toggle();
+					return;
+				}
+
 				// Time scale cycle (+ or = key)
 				if (e.key === "+" || e.key === "=") {
 					const idx = TIME_SCALES.indexOf(timeScale);
@@ -760,14 +771,17 @@ async function init() {
 				// Mode switching — skip if user is typing in an input field
 				if (e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA") {
 					if (e.key === "1") {
+						if (populationGraph) populationGraph.mark();
 						modeManager.switchMode("narrative", modeContext);
 						return;
 					}
 					if (e.key === "2") {
+						if (populationGraph) populationGraph.mark();
 						modeManager.switchMode("model-viewer", modeContext);
 						return;
 					}
 					if (e.key === "3") {
+						if (populationGraph) populationGraph.mark();
 						modeManager.switchMode("editor", modeContext);
 						return;
 					}
@@ -1134,6 +1148,7 @@ function spawnInitialSeed() {
 // ── Game Loop ──────────────────────────────────────────────────
 let _diagFrameCount = 0;
 let perfMonitor = null;
+let populationGraph = null;
 function gameLoop() {
 	try {
 		if (perfMonitor) perfMonitor.begin();
@@ -1457,6 +1472,17 @@ function gameLoop() {
 				food: foodPool,
 				seed: seedPool,
 			}, { timeScale, adaptiveResolution });
+		}
+
+		// Population graph — live species count chart (dev mode only)
+		if (populationGraph) {
+			populationGraph.sample(elapsed, {
+				fish: fishPool.getActiveCount(),
+				dolphin: dolphinPool.getActiveCount(),
+				manatee: manateePool.getActiveCount(),
+				plant: plantPool.getActiveCount(),
+				food: foodPool.getActiveCount(),
+			});
 		}
 	} catch (loopErr) {
 		// Catch any uncaught error in the game loop so it surfaces on iOS diag overlay

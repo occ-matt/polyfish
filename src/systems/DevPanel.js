@@ -104,7 +104,7 @@ export function buildDevPanel(context) {
   // Shortcut hints
   const hints = document.createElement('div');
   hints.style.cssText = 'color: #0f0; margin-top: 4px; opacity: 0.45; font-size: 10px;';
-  hints.innerHTML = '` debug &nbsp; +/= timescale';
+  hints.innerHTML = '` debug &nbsp; +/= timescale &nbsp; G graph';
   links.appendChild(hints);
 
   panel.appendChild(links);
