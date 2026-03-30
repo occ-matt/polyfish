@@ -34,12 +34,19 @@ class SceneManager {
       alpha: true,
       powerPreference: 'default',
     });
-    // Cap pixel ratio — default 1.0, ?useHiDPR bumps to 2.
+    // Cap pixel ratio based on effective pixel count, not just raw DPR.
+    // On a 4K monitor (3840×2160) with DPR 2.0, uncapped rendering would push
+    // 7680×4320 = 33M pixels — brutal on any GPU. We cap so the effective
+    // framebuffer never exceeds ~4K worth of pixels (MAX_EFFECTIVE_WIDTH).
     // IMPORTANT: setPixelRatio MUST come before setSize so the first frame's
     // canvas buffer matches the intended DPR (avoids iOS layout glitch where
     // the canvas briefly renders at wrong size, causing Safari to rescale the viewport).
-    const maxDPR = useHiDPR ? 2 : 1.0;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDPR));
+    const MAX_EFFECTIVE_WIDTH = 3840; // never exceed ~4K horizontal resolution
+    const rawDPR = window.devicePixelRatio || 1;
+    const hardCap = useHiDPR ? 2 : 1.0;
+    const effectiveCap = MAX_EFFECTIVE_WIDTH / window.innerWidth;
+    const maxDPR = Math.min(rawDPR, hardCap, effectiveCap);
+    this.renderer.setPixelRatio(Math.max(maxDPR, 0.75)); // floor at 0.75 to avoid blurriness
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;

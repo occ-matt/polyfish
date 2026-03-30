@@ -38,6 +38,7 @@ import { VR_BUILD_VERSION } from "./rendering/VRDebugPanel.js";
 import { CinematicDOF } from "./camera/CinematicDOF.js";
 import { applyCaustics, updateCausticTime } from "./rendering/CausticShader.js";
 import { GodRayRenderer } from "./rendering/GodRayRenderer.js";
+import { AdaptiveResolution } from "./rendering/AdaptiveResolution.js";
 import { VRGodRays } from "./rendering/VRGodRays.js";
 import { VREndScreen } from "./rendering/VREndScreen.js";
 import { createCreatureInstanced } from "./rendering/InstancedCreatures.js";
@@ -111,6 +112,7 @@ const USE_HI_DPR = flag("useHiDPR", true, false, false); // VR: WebXR controls f
 const USE_INSTANCING = flag("useInstancing"); // VR: critical for draw-call reduction
 const USE_DOF = flag("useDOF", true, false, false); // VR: stereo post-processing too heavy
 const USE_GODRAYS = flag("useGodrays", true, false, false); // VR: fullscreen post too heavy in stereo
+const USE_ADAPTIVE_RES = flag("adaptiveRes", true, false, false); // Dynamic DPR scaling based on frame time
 if (isMobile || isVRDevice || _params.toString()) {
 	console.log("[PolyFish] Feature flags:", {
 		isMobile,
@@ -165,6 +167,7 @@ let modeManager;
 let physicsProxy;
 let cinematicDOF;
 let godRayRenderer;
+let adaptiveResolution;
 let vrGodRays;
 let vrEndScreen;
 let vfxManager;
@@ -471,6 +474,14 @@ async function init() {
 	if (USE_GODRAYS && !MINIMAL) {
 		godRayRenderer = new GodRayRenderer(renderer, scene, camera);
 		GS.godRayRenderer = godRayRenderer;
+	}
+	// Adaptive resolution: dynamically adjusts pixel ratio based on frame time.
+	// Smoothly reduces DPR when GPU is struggling (e.g., fullscreen 4K) and
+	// recovers when headroom is available. Desktop only — VR framebuffer is
+	// managed by the WebXR runtime.
+	if (USE_ADAPTIVE_RES && !MINIMAL) {
+		adaptiveResolution = new AdaptiveResolution(renderer);
+		GS.adaptiveResolution = adaptiveResolution;
 	}
 	// VR god rays: DISABLED - perf hit without visible benefit in stereo rendering.
 	// Kept as dead code for future re-enabling once we diagnose the rendering issue.
@@ -1171,6 +1182,7 @@ function gameLoop() {
 		//    even if simulationStep throws or title screen is still active) ──
 		updateCausticTime(elapsed);
 		if (godRayRenderer) godRayRenderer.update(elapsed);
+		if (adaptiveResolution) adaptiveResolution.update(rawDt);
 		// VR god rays disabled (vrGodRays is null)
 		// VR end screen animation (tint, death message, credits scroll)
 		if (vrEndScreen && vrEndScreen.active) {
@@ -1461,7 +1473,8 @@ function gameLoop() {
 						`Fish:    ${fa}   Dolphin: ${da}\n` +
 						`Manatee: ${ma}   Plant:   ${pa}\n` +
 						`Food:    ${fo}   Seed:    ${se}\n` +
-						`TimeScale: ${timeScale}x`;
+						`TimeScale: ${timeScale}x` +
+						(adaptiveResolution ? `  DPR: ${adaptiveResolution.getDPR().toFixed(2)}` : '');
 				}
 				perfTimer = 0;
 				perfFrameCount = 0;

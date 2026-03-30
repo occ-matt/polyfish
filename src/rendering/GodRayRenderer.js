@@ -295,23 +295,37 @@ export class GodRayRenderer {
    * @param {THREE.Scene} scene
    * @param {THREE.PerspectiveCamera} camera
    */
-  constructor(renderer, scene, camera) {
+  /**
+   * @param {THREE.WebGLRenderer} renderer
+   * @param {THREE.Scene} scene
+   * @param {THREE.PerspectiveCamera} camera
+   * @param {Object} [options]
+   * @param {number} [options.resolutionScale=0.5] - Render god rays at this
+   *   fraction of the full framebuffer resolution. God rays are a soft,
+   *   low-frequency effect so half-res (0.5) is visually identical to full-res
+   *   while saving ~75% of the fragment work (depth capture + overlay quad).
+   */
+  constructor(renderer, scene, camera, options = {}) {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
     this.enabled = true;
 
+    // Resolution scale for the god ray passes (depth + overlay).
+    // 0.5 = half-res on each axis = 25% of the pixels. Huge perf win at 4K.
+    this.resolutionScale = options.resolutionScale ?? 0.5;
+
     // Read config
     const gc = CONFIG.godrays || {};
     const cc = CONFIG.caustics || {};
 
-    // Create render target with depth texture
+    // Create render targets at reduced resolution
     const size = renderer.getSize(new THREE.Vector2());
     const pixelRatio = renderer.getPixelRatio();
-    const w = Math.floor(size.x * pixelRatio);
-    const h = Math.floor(size.y * pixelRatio);
+    const w = Math.floor(size.x * pixelRatio * this.resolutionScale);
+    const h = Math.floor(size.y * pixelRatio * this.resolutionScale);
 
-    // Depth-only render target (no color buffer needed, just depth)
+    // Depth-only render target at reduced resolution
     this.depthTarget = new THREE.WebGLRenderTarget(w, h, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
@@ -319,6 +333,14 @@ export class GodRayRenderer {
     });
     this.depthTarget.depthTexture = new THREE.DepthTexture(w, h);
     this.depthTarget.depthTexture.type = THREE.UnsignedIntType;
+
+    // Color render target for the god ray overlay quad — rendered at reduced
+    // resolution then composited onto the full-res framebuffer via a blit quad.
+    this.colorTarget = new THREE.WebGLRenderTarget(w, h, {
+      minFilter: THREE.LinearFilter,  // Bilinear upscale for smooth result
+      magFilter: THREE.LinearFilter,
+      colorSpace: THREE.NoColorSpace,
+    });
 
     // Fullscreen quad rendered additively on top of the scene
     this.material = new THREE.ShaderMaterial({
@@ -351,11 +373,41 @@ export class GodRayRenderer {
     this.quadScene.add(this.quad);
     this.quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
+    // Blit quad: composites the reduced-resolution god ray color target
+    // onto the full-resolution framebuffer with additive blending.
+    this.blitMaterial = new THREE.ShaderMaterial({
+      uniforms: { tGodRays: { value: null } },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D tGodRays;
+        varying vec2 vUv;
+        void main() {
+          gl_FragColor = texture2D(tGodRays, vUv);
+        }
+      `,
+      depthWrite: false,
+      depthTest: false,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+    });
+    this.blitQuad = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2),
+      this.blitMaterial
+    );
+    this.blitScene = new THREE.Scene();
+    this.blitScene.add(this.blitQuad);
+
     // Handle resize
     this._onResize = () => this._handleResize();
     window.addEventListener('resize', this._onResize);
 
-    // GodRayRenderer initialized (screen-space volumetric)
+    // GodRayRenderer initialized (screen-space volumetric, half-res)
   }
 
   /**
@@ -390,7 +442,10 @@ export class GodRayRenderer {
   /**
    * Render god ray overlay additively on top of the scene.
    * Call AFTER the normal scene has been rendered to screen.
-   * The scene colors are untouched (no intermediate color render target).
+   *
+   * Two-step process for half-res rendering:
+   * 1. Render god ray shader into reduced-resolution color target
+   * 2. Blit (upscale) that texture onto the full-res framebuffer additively
    */
   renderOverlay() {
     if (!this.enabled) return;
@@ -404,11 +459,26 @@ export class GodRayRenderer {
     this.material.uniforms.uInvView.value.copy(cam.matrixWorld);
     this.material.uniforms.tDepth.value = this.depthTarget.depthTexture;
 
-    // Render additive god ray quad on top of whatever is in the framebuffer.
-    // The autoClear must be disabled so we don't erase the scene.
     const origAutoClear = renderer.autoClear;
     renderer.autoClear = false;
+
+    // Step 1: Render god ray shader into the half-res color target.
+    // The god ray material does NOT use additive blending here — it writes
+    // raw god ray color into the offscreen texture.
+    const origTarget = renderer.getRenderTarget();
+    const origBlending = this.material.blending;
+    this.material.blending = THREE.NormalBlending;
+    renderer.setRenderTarget(this.colorTarget);
+    renderer.clear();
     renderer.render(this.quadScene, this.quadCamera);
+    this.material.blending = origBlending;
+
+    // Step 2: Blit the half-res god ray texture onto the full-res framebuffer.
+    // Bilinear filtering in the texture sampler handles the upscale smoothly.
+    this.blitMaterial.uniforms.tGodRays.value = this.colorTarget.texture;
+    renderer.setRenderTarget(origTarget);
+    renderer.render(this.blitScene, this.quadCamera);
+
     renderer.autoClear = origAutoClear;
   }
 
@@ -417,9 +487,10 @@ export class GodRayRenderer {
     if (!this.enabled) return;
     const size = this.renderer.getSize(new THREE.Vector2());
     const pr = this.renderer.getPixelRatio();
-    const w = Math.floor(size.x * pr);
-    const h = Math.floor(size.y * pr);
+    const w = Math.floor(size.x * pr * this.resolutionScale);
+    const h = Math.floor(size.y * pr * this.resolutionScale);
     this.depthTarget.setSize(w, h);
+    this.colorTarget.setSize(w, h);
   }
 
   /** Clean up GPU resources */
@@ -428,7 +499,10 @@ export class GodRayRenderer {
     window.removeEventListener('resize', this._onResize);
     this.depthTarget.dispose();
     this.depthTarget.depthTexture.dispose();
+    this.colorTarget.dispose();
     this.material.dispose();
+    this.blitMaterial.dispose();
     this.quad.geometry.dispose();
+    this.blitQuad.geometry.dispose();
   }
 }

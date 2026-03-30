@@ -152,6 +152,7 @@ export class CinematicDOF {
    * @param {number} options.vignetteIntensity - Vignette strength 0-1 (default: 0.35)
    * @param {number} options.focusRackSpeed - Rack focus interpolation rate (default: 2.0)
    * @param {number} options.profileTransitionTime - Aperture transition duration in seconds (default: 1.5)
+   * @param {number} options.resolutionScale - Render DOF at this fraction of full res (default: 0.75)
    */
   constructor(renderer, scene, camera, options = {}) {
     this.renderer = renderer;
@@ -163,6 +164,11 @@ export class CinematicDOF {
     this.vignetteIntensity = options.vignetteIntensity ?? 0.08;
     this.focusRackSpeed = options.focusRackSpeed ?? 2.0;
     this.profileTransitionTime = options.profileTransitionTime ?? 1.5;
+
+    // DOF resolution scale — the BokehPass output is inherently blurry,
+    // so rendering at 75% saves ~44% of fragment work with no visible
+    // quality loss in the final blurred image.
+    this.resolutionScale = options.resolutionScale ?? 0.75;
 
     // State tracking
     this.currentProfile = DOF_PROFILES[options.initialProfile ?? 'MEDIUM'];
@@ -180,15 +186,17 @@ export class CinematicDOF {
 
     // EffectComposer setup — use HalfFloat render target to preserve
     // color accuracy through the post-processing pipeline (prevents
-    // double-darkening from ACES tonemapping + sRGB color space)
+    // double-darkening from ACES tonemapping + sRGB color space).
+    // Render at reduced resolution since DOF output is blurred anyway.
     const pixelRatio = Math.min(window.devicePixelRatio, 2);
+    const scaledRatio = pixelRatio * this.resolutionScale;
     const renderTarget = new THREE.WebGLRenderTarget(
-      window.innerWidth * pixelRatio,
-      window.innerHeight * pixelRatio,
+      Math.floor(window.innerWidth * scaledRatio),
+      Math.floor(window.innerHeight * scaledRatio),
       { type: THREE.HalfFloatType }
     );
     this.composer = new EffectComposer(renderer, renderTarget);
-    this.composer.setPixelRatio(pixelRatio);
+    this.composer.setPixelRatio(scaledRatio);
 
     // RenderPass: render scene to texture
     const renderPass = new RenderPass(scene, camera);
@@ -415,6 +423,8 @@ export class CinematicDOF {
    * @private
    */
   onWindowResize() {
+    // Pass CSS pixel dimensions — the composer applies its own pixelRatio
+    // (which already includes resolutionScale from the constructor).
     const width = window.innerWidth;
     const height = window.innerHeight;
 
