@@ -337,7 +337,14 @@ export class EditorMode extends SceneMode {
   // ── Debug Visuals (actual Jolt collision shapes) ─────────────────
 
   _buildDebugVisuals(ctx) {
-    for (const obj of this.debugObjects) ctx.scene.remove(obj);
+    for (const obj of this.debugObjects) {
+      ctx.scene.remove(obj);
+      // Dispose geometry/materials to prevent leaks during live editing
+      obj.traverse(child => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) child.material.dispose();
+      });
+    }
     this.debugObjects = [];
 
     const scene = ctx.scene;
@@ -671,6 +678,20 @@ export class EditorMode extends SceneMode {
       });
     }
 
+    // Live-update: apply changes in real time as user edits values
+    const liveUpdate = () => { this._applyProperties(type, true); };
+    const allInputs = panel.querySelectorAll('input[data-field]');
+    for (const input of allInputs) {
+      input.addEventListener('input', liveUpdate);
+    }
+    // Live-update animation inputs too
+    const animInputs = panel.querySelectorAll('input[data-anim-field], input[data-anim-axis]');
+    for (const input of animInputs) {
+      input.addEventListener('input', liveUpdate);
+    }
+    // Live-update color
+    if (colorPicker) colorPicker.addEventListener('input', liveUpdate);
+
     document.getElementById('editor-save-btn').addEventListener('click', () => {
       this._applyProperties(type);
     });
@@ -680,7 +701,7 @@ export class EditorMode extends SceneMode {
     });
   }
 
-  _applyProperties(type) {
+  _applyProperties(type, silent = false) {
     const cfg = getConfigForType(type);
     const panel = document.getElementById('editor-props');
     if (!panel || !cfg) return;
@@ -759,16 +780,16 @@ export class EditorMode extends SceneMode {
 
     this._rebuildDebugVisuals();
 
-    // Editor: properties saved for type
-
-    const btn = document.getElementById('editor-save-btn');
-    if (btn) {
-      btn.textContent = 'Saved!';
-      btn.style.background = 'rgba(40,180,80,0.9)';
-      setTimeout(() => {
-        btn.textContent = 'Save';
-        btn.style.background = 'rgba(40,120,80,0.8)';
-      }, 1000);
+    if (!silent) {
+      const btn = document.getElementById('editor-save-btn');
+      if (btn) {
+        btn.textContent = 'Saved!';
+        btn.style.background = 'rgba(40,180,80,0.9)';
+        setTimeout(() => {
+          btn.textContent = 'Save';
+          btn.style.background = 'rgba(40,120,80,0.8)';
+        }, 1000);
+      }
     }
   }
 
