@@ -12,23 +12,23 @@
 
 <nav>
   <div class="nav-inner">
-    <a href="index.html" class="nav-logo">Making of <span>PolyFish</span></a>
+    <a href="/making-of/index.html" class="nav-logo">Making of <span>PolyFish</span></a>
     <a href="/" class="nav-play-mobile">&#9654; Play PolyFish</a>
     <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
     </button>
     <div class="nav-links">
-      <a href="index.html">Home</a>
-      <a href="origins.html">Origins</a>
-      <a href="ai.html" class="active">AI Collab</a>
-      <a href="creatures.html">Creatures</a>
-      <a href="ecosystem.html">Ecosystem</a>
-      <a href="kelp.html">Kelp</a>
-      <a href="rendering.html">Rendering</a>
-      <a href="camera.html">Camera</a>
-      <a href="audio.html">Audio</a>
-      <a href="performance.html">Performance</a>
-      <a href="demos.html">Demos</a>
+      <a href="/making-of/index.html">Home</a>
+      <a href="/making-of/origins.html">Origins</a>
+      <a href="/making-of/ai.html" class="active">AI Collab</a>
+      <a href="/making-of/creatures.html">Creatures</a>
+      <a href="/making-of/ecosystem.html">Ecosystem</a>
+      <a href="/making-of/kelp.html">Kelp</a>
+      <a href="/making-of/rendering.html">Rendering</a>
+      <a href="/making-of/camera.html">Camera</a>
+      <a href="/making-of/audio.html">Audio</a>
+      <a href="/making-of/performance.html">Performance</a>
+      <a href="/making-of/demos.html">Demos</a>
       <a href="/" class="nav-play">Play PolyFish</a>
     </div>
   </div>
@@ -106,9 +106,9 @@
 
   <h3>Rapid Prototyping of Complex Systems</h3>
 
-  <p>Some of the most satisfying moments came from building systems that would have taken weeks to learn and implement solo. The <a href="camera.html">documentary camera system</a> is a good example: a Director that manages narrative phases, a Cinematographer that composes shots with 11 different shot types, and an Ecosystem Scout that detects interesting creature behavior to film. That's roughly 2,500 lines of interconnected state-machine code. Claude produced a working first draft in a single session, and Matt could immediately start tweaking shot feel instead of spending days getting a basic follow-cam working.</p>
+  <p>Some of the most satisfying moments came from building systems that would have taken weeks to learn and implement solo. The <a href="/making-of/camera.html">documentary camera system</a> is a good example: a Director that manages narrative phases, a Cinematographer that composes shots with 11 different shot types, and an Ecosystem Scout that detects interesting creature behavior to film. That's roughly 2,500 lines of interconnected state-machine code. Claude produced a working first draft in a single session, and Matt could immediately start tweaking shot feel instead of spending days getting a basic follow-cam working.</p>
 
-  <p>The <a href="rendering.html">caustic shader system</a> followed the same pattern. Matt described the look he wanted for seabed light patterns, Claude produced a GLSL implementation using domain-warped Voronoi cells, and Matt tuned the colors and speed. The result looks better than anything either would have built independently.</p>
+  <p>The <a href="/making-of/rendering.html">caustic shader system</a> followed the same pattern. Matt described the look he wanted for seabed light patterns, Claude produced a GLSL implementation using domain-warped Voronoi cells, and Matt tuned the colors and speed. The result looks better than anything either would have built independently.</p>
 
   <h3>The Port Itself</h3>
 
@@ -150,13 +150,13 @@
 
   <h3>Systems Neither of Us Had Built Before</h3>
 
-  <p>The most surprising outcome was how well the collaboration handled novel territory. Matt had never written a Verlet physics solver. The <a href="kelp.html">kelp system</a> was uncharted for both of us - Matt described how kelp should behave physically, Claude proposed position-based dynamics, and iterative tuning of buoyancy, damping, and constraint stiffness produced something that genuinely looks organic.</p>
+  <p>The most surprising outcome was how well the collaboration handled novel territory. Matt had never written a Verlet physics solver. The <a href="/making-of/kelp.html">kelp system</a> was uncharted for both of us - Matt described how kelp should behave physically, Claude proposed position-based dynamics, and iterative tuning of buoyancy, damping, and constraint stiffness produced something that genuinely looks organic.</p>
 
-  <p>The <a href="creatures.html">vertex-shader swim animation</a> was another leap. Inspired by a GDC talk about Abzu, Matt wanted GPU-driven creature animation. Claude's first attempt was recognizable but stiff; after several rounds of tweaking amplitude curves and phase offsets, the fish undulate convincingly. Performance went from ~100 creatures with CPU animation to 200+ with the GPU approach.</p>
+  <p>The <a href="/making-of/creatures.html">vertex-shader swim animation</a> was another leap. Inspired by a GDC talk about Abzu, Matt wanted GPU-driven creature animation. Claude's first attempt was recognizable but stiff; after several rounds of tweaking amplitude curves and phase offsets, the fish undulate convincingly. Performance went from ~100 creatures with CPU animation to 200+ with the GPU approach.</p>
 
   <h3>Cross-Domain Problem Solving</h3>
 
-  <p>The collaboration shines when a problem spans multiple domains. The <a href="audio.html">narration system</a> needed to coordinate audio timing, camera cuts, creature AI, and UI state - four separate systems working in concert. Claude could reason about all four simultaneously in a way that would have required constant context-switching for a solo developer.</p>
+  <p>The collaboration shines when a problem spans multiple domains. The <a href="/making-of/audio.html">narration system</a> needed to coordinate audio timing, camera cuts, creature AI, and UI state - four separate systems working in concert. Claude could reason about all four simultaneously in a way that would have required constant context-switching for a solo developer.</p>
 
   <h3>Toolmaking for Collaboration</h3>
 
@@ -219,11 +219,11 @@
 
   <!-- ── Page Nav ── -->
   <div class="page-nav">
-    <a href="origins.html">
+    <a href="/making-of/origins.html">
       <span class="nav-dir">&larr; Previous</span>
       <span class="nav-title">Origins</span>
     </a>
-    <a href="creatures.html">
+    <a href="/making-of/creatures.html">
       <span class="nav-dir">Next &rarr;</span>
       <span class="nav-title">Creatures</span>
     </a>

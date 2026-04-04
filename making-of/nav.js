@@ -3,16 +3,16 @@
 
 (function() {
   const pages = [
-    { href: 'index.html', label: 'Home' },
-    { href: 'kelp.html', label: 'Kelp' },
-    { href: 'creatures.html', label: 'Creatures' },
-    { href: 'camera.html', label: 'Camera' },
-    { href: 'rendering.html', label: 'Rendering' },
-    { href: 'ecosystem.html', label: 'Ecosystem' },
-    { href: 'audio.html', label: 'Audio' },
+    { href: '/making-of/index.html', label: 'Home' },
+    { href: '/making-of/kelp.html', label: 'Kelp' },
+    { href: '/making-of/creatures.html', label: 'Creatures' },
+    { href: '/making-of/camera.html', label: 'Camera' },
+    { href: '/making-of/rendering.html', label: 'Rendering' },
+    { href: '/making-of/ecosystem.html', label: 'Ecosystem' },
+    { href: '/making-of/audio.html', label: 'Audio' },
   ];
 
-  const current = window.location.pathname.split('/').pop() || 'index.html';
+  const current = window.location.pathname;
 
   const links = pages.map(p =>
     `<a href="${p.href}"${p.href === current ? ' class="active"' : ''}>${p.label}</a>`
@@ -21,7 +21,7 @@
   const html = `
 <nav>
   <div class="nav-inner">
-    <a href="index.html" class="nav-logo">Making of <span>PolyFish</span></a>
+    <a href="/making-of/index.html" class="nav-logo">Making of <span>PolyFish</span></a>
     <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
     </button>
