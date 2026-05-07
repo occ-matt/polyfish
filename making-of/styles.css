@@ -889,6 +889,38 @@ footer .footer-play:hover {
   border-bottom-color: var(--accent);
 }
 
+footer .footer-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 1.2rem;
+  margin-left: 0.6rem;
+  padding: 0.55rem 1.4rem 0.55rem 1.2rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: 100px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+footer .footer-github svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+footer .footer-github:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--fg-muted);
+  color: var(--fg);
+  border-bottom-color: var(--fg-muted);
+}
+
 /* ── Scroll-reveal animations ── */
 .reveal {
   opacity: 0;
