@@ -142,7 +142,7 @@ Audio assets are used under Creative Commons licenses. See attribution files in 
 
 ## Contact
 
-Questions or feedback? [Open an issue](https://github.com/occ-matt/polyfish/issues) on this repo, or find me on [Bluesky](https://bsky.app/profile/mattscott.bsky.social).
+Questions or feedback? [Open an issue](https://github.com/occ-matt/polyfish/issues) on this repo, or find me on [Bluesky](https://bsky.app/profile/mattscott.dev).
 
 ## License
 
